@@ -30,6 +30,8 @@ export default function ReaderPage() {
   const [annoLoading, setAnnoLoading] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-lite");
+  const [density, setDensity] = useState("medium");
+  const [style, setStyle] = useState("balanced");
   const [regenerateKey, setRegenerateKey] = useState(0);
   const [annoError, setAnnoError] = useState("");
 
@@ -124,6 +126,8 @@ export default function ReaderPage() {
             pageText: text,
             pageNumber: currentPage,
             model: selectedModel,
+            density,
+            style,
           };
         } else {
           // Scanned PDF: render page to image and send to Gemini vision
@@ -140,6 +144,8 @@ export default function ReaderPage() {
             pageImage: base64,
             pageNumber: currentPage,
             model: selectedModel,
+            density,
+            style,
           };
         }
 
@@ -171,7 +177,7 @@ export default function ReaderPage() {
         setAnnoLoading(false);
       }
     },
-    [pdf, bookId, currentPage, title, selectedModel]
+    [pdf, bookId, currentPage, title, selectedModel, density, style]
   );
 
   useEffect(() => {
@@ -311,6 +317,10 @@ export default function ReaderPage() {
         currentPage={currentPage}
         model={selectedModel}
         onModelChange={setSelectedModel}
+        density={density}
+        onDensityChange={setDensity}
+        style={style}
+        onStyleChange={setStyle}
         error={annoError}
       />
 

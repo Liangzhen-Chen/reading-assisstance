@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { bookTitle, pageText, pageImage, pageNumber, model } =
+  const { bookTitle, pageText, pageImage, pageNumber, model, density, style } =
     await request.json();
 
   if (!pageNumber || (!pageText && !pageImage)) {
@@ -83,23 +83,43 @@ export async function POST(request: NextRequest) {
     ? model
     : "gemini-2.5-flash-lite";
 
+  // Build density instruction
+  const DENSITY_MAP: Record<string, string> = {
+    low: "本页只写 1 条最重要的批注，只标记真正关键的地方。",
+    medium: "本页写 2-3 条批注，覆盖核心论点和一个辅助观察。",
+    high: "本页写 4-6 条批注，尽量全面覆盖：论点、术语、逻辑链、速读提示都可以有。",
+  };
+  const densityInstruction = DENSITY_MAP[density] || DENSITY_MAP.medium;
+
+  // Build style instruction
+  const STYLE_MAP: Record<string, string> = {
+    casual:
+      "语气非常口语化，像朋友聊天：「卧槽这个厉害」「直接跳过」「划重点！」。可以用网络用语，简短粗暴。",
+    balanced:
+      "语气像一个聪明的学长：有见解但不居高临下，偶尔幽默，用符号简写。这是默认风格。",
+    academic:
+      "语气偏学术但不死板：使用专业术语，指出方法论问题，对比相关学术文献或理论框架。可以质疑论证的严谨性。",
+  };
+  const styleInstruction = STYLE_MAP[style] || STYLE_MAP.balanced;
+
   // Build content parts — text or image
   const contentParts: Record<string, unknown>[] = [];
 
+  const settingsBlock = `\n\n## 本次设定\n批注密度：${densityInstruction}\n语气风格：${styleInstruction}`;
+
   if (pageImage) {
-    // Vision mode: send page as image
     contentParts.push({
-      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的扫描图片。请先识别图中的文字内容，然后生成阅读批注。`,
+      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的扫描图片。请先识别图中的文字内容，然后生成阅读批注。${settingsBlock}`,
     });
     contentParts.push({
       inline_data: {
         mime_type: "image/png",
-        data: pageImage, // base64
+        data: pageImage,
       },
     });
   } else {
     contentParts.push({
-      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。\n\n请生成阅读批注。\n\n--- 以下为原文 ---\n${pageText}`,
+      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。\n\n请生成阅读批注。${settingsBlock}\n\n--- 以下为原文 ---\n${pageText}`,
     });
   }
 

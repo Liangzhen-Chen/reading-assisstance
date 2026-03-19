@@ -19,6 +19,18 @@ export const AVAILABLE_MODELS = [
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
 ];
 
+export const DENSITY_OPTIONS = [
+  { id: "low", label: "精简", desc: "每页 1 条" },
+  { id: "medium", label: "适中", desc: "每页 2-3 条" },
+  { id: "high", label: "详细", desc: "每页 4-6 条" },
+];
+
+export const STYLE_OPTIONS = [
+  { id: "casual", label: "轻松", desc: "像朋友聊天" },
+  { id: "balanced", label: "学长", desc: "有见解不居高临下" },
+  { id: "academic", label: "学术", desc: "专业术语+方法论" },
+];
+
 interface Props {
   annotations: StoredAnnotation[];
   loading: boolean;
@@ -28,6 +40,10 @@ interface Props {
   currentPage: number;
   model: string;
   onModelChange: (model: string) => void;
+  density: string;
+  onDensityChange: (density: string) => void;
+  style: string;
+  onStyleChange: (style: string) => void;
   error?: string;
 }
 
@@ -40,6 +56,10 @@ export default function AnnotationPanel({
   currentPage,
   model,
   onModelChange,
+  density,
+  onDensityChange,
+  style,
+  onStyleChange,
   error,
 }: Props) {
   if (!visible) return null;
@@ -68,8 +88,8 @@ export default function AnnotationPanel({
           </button>
         </div>
 
-        {/* Model selector */}
-        <div className="flex items-center gap-2 mb-4">
+        {/* Settings row: model */}
+        <div className="flex items-center gap-2 mb-2">
           <select
             value={model}
             onChange={(e) => onModelChange(e.target.value)}
@@ -89,6 +109,45 @@ export default function AnnotationPanel({
           >
             {loading ? "生成中..." : "重新生成"}
           </button>
+        </div>
+
+        {/* Settings row: density + style */}
+        <div className="flex items-center gap-2 mb-4">
+          {/* Density toggle */}
+          <div className="flex-1 flex bg-[#f5f4f0] rounded-lg p-0.5">
+            {DENSITY_OPTIONS.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => onDensityChange(d.id)}
+                className={`flex-1 text-xs py-1 rounded-md transition-colors ${
+                  density === d.id
+                    ? "bg-white text-[#2c2c2c] shadow-sm font-medium"
+                    : "text-[#999] hover:text-[#666]"
+                }`}
+                title={d.desc}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Style toggle */}
+          <div className="flex-1 flex bg-[#f5f4f0] rounded-lg p-0.5">
+            {STYLE_OPTIONS.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => onStyleChange(s.id)}
+                className={`flex-1 text-xs py-1 rounded-md transition-colors ${
+                  style === s.id
+                    ? "bg-white text-[#2c2c2c] shadow-sm font-medium"
+                    : "text-[#999] hover:text-[#666]"
+                }`}
+                title={s.desc}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Model badge */}
