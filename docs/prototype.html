@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReadLens — 阅读器原型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #faf9f6;
+    --text: #2c2c2c;
+    --text-light: #666;
+    --border: #e5e2db;
+    --accent: #5b7f6a;
+    --accent-light: #eef4f0;
+    --card-bg: #fff;
+    --highlight-claude: #f0e6d3;
+    --highlight-gemini: #d9e4f5;
+    --sidebar-w: 340px;
+  }
+
+  body {
+    font-family: -apple-system, "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+  }
+
+  /* ===== Top Bar ===== */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 56px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px;
+  }
+  .topbar-logo {
+    font-size: 18px; font-weight: 700; color: var(--accent);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .topbar-logo svg { width: 22px; height: 22px; }
+  .topbar-title {
+    font-size: 14px; color: var(--text-light);
+    max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* ===== Toggle ===== */
+  .model-toggle {
+    display: flex; background: #f0efe9; border-radius: 8px; padding: 3px; gap: 2px;
+  }
+  .model-toggle button {
+    padding: 6px 16px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-weight: 500; background: transparent; color: var(--text-light);
+    transition: all 0.2s;
+  }
+  .model-toggle button.active-claude {
+    background: #e8d5b8; color: #7a5c2e; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .model-toggle button.active-gemini {
+    background: #c8d8f0; color: #3a5a8c; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .toggle-annotations {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; cursor: pointer; font-size: 13px; color: var(--text-light);
+    transition: all 0.2s;
+  }
+  .toggle-annotations:hover { background: #f5f4f0; }
+  .toggle-annotations.off { background: #f5f4f0; color: #aaa; }
+
+  /* ===== Layout ===== */
+  .main {
+    margin-top: 56px;
+    margin-right: var(--sidebar-w);
+    min-height: calc(100vh - 56px);
+    transition: margin-right 0.3s ease;
+  }
+  .main.sidebar-hidden {
+    margin-right: 0;
+  }
+
+  /* ===== Reader Pane ===== */
+  .reader {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 48px 32px 120px 32px;
+  }
+  .page-block {
+    margin-bottom: 48px;
+    position: relative;
+  }
+  .page-label {
+    font-size: 11px; color: #bbb; font-weight: 600; letter-spacing: 0.5px;
+    margin-bottom: 16px; text-transform: uppercase;
+  }
+  .page-block h3 {
+    font-size: 20px; font-weight: 700; margin: 24px 0 12px 0; color: var(--text);
+  }
+  .page-block p {
+    font-size: 15.5px; line-height: 1.85; color: #3a3a3a; margin-bottom: 14px;
+    text-align: justify;
+  }
+  .page-block .figure-caption {
+    font-size: 13px; color: #999; background: #f8f7f3; border-radius: 6px;
+    padding: 12px 16px; margin: 12px 0 18px 0; border-left: 3px solid #ddd;
+  }
+
+  /* Anchor highlights */
+  .anchor-highlight {
+    border-radius: 3px; padding: 1px 2px; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .anchor-highlight.claude { background: var(--highlight-claude); }
+  .anchor-highlight.gemini { background: var(--highlight-gemini); }
+  .anchor-highlight:hover { filter: brightness(0.95); }
+
+  /* ===== Annotation Sidebar ===== */
+  .sidebar {
+    width: var(--sidebar-w);
+    border-left: 1px solid var(--border);
+    background: #fff;
+    padding: 24px 20px;
+    position: fixed;
+    right: 0; top: 56px; bottom: 0;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+  }
+  .sidebar.hidden { transform: translateX(100%); }
+  .sidebar-header {
+    font-size: 12px; font-weight: 600; color: #bbb; letter-spacing: 0.5px;
+    text-transform: uppercase; margin-bottom: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .annotation-count {
+    background: #f0efe9; padding: 2px 10px; border-radius: 10px;
+    font-size: 11px; color: var(--text-light);
+  }
+
+  /* Annotation Cards */
+  .anno-card {
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+    border: 1px solid #eee; transition: all 0.2s; cursor: default;
+  }
+  .anno-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .anno-card.claude-card { border-left: 3px solid #c9a96e; }
+  .anno-card.gemini-card { border-left: 3px solid #6a9fd8; }
+
+  .anno-type {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+    margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+  }
+  .anno-type .icon { font-size: 14px; }
+  .claude-card .anno-type { color: #9a7a3e; }
+  .gemini-card .anno-type { color: #4a7ab8; }
+
+  .anno-content {
+    font-size: 14px; line-height: 1.7; color: #444;
+  }
+  .anno-page {
+    font-size: 11px; color: #bbb; margin-top: 8px;
+  }
+
+  /* Page nav */
+  .page-nav {
+    position: fixed; bottom: 24px;
+    left: calc(50% - var(--sidebar-w) / 2);
+    transform: translateX(-50%);
+    display: flex; gap: 6px; align-items: center;
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 8px 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    transition: left 0.3s ease;
+  }
+  .page-nav.sidebar-hidden {
+    left: 50%;
+  }
+  .page-nav button {
+    width: 36px; height: 36px; border: none; border-radius: 8px;
+    background: #f5f4f0; cursor: pointer; font-size: 16px; color: var(--text-light);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .page-nav button:hover { background: #e8e7e2; }
+  .page-nav span { font-size: 13px; color: var(--text-light); padding: 0 8px; }
+
+  /* (responsive handled by .main.sidebar-hidden margin-right) */
+
+  /* ===== Scrollbar ===== */
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+  /* Model badge */
+  .model-badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px; margin-left: 6px;
+    vertical-align: middle;
+  }
+  .model-badge.claude-badge { background: #f0e6d3; color: #7a5c2e; }
+  .model-badge.gemini-badge { background: #d9e4f5; color: #3a5a8c; }
+</style>
+</head>
+<body>
+
+<!-- ===== Top Bar ===== -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    </svg>
+    ReadLens
+  </div>
+  <div class="topbar-title">交互设计精髓 About Face 4 — 第 3 章 为用户建模：人物模型和目标</div>
+  <div class="topbar-actions">
+    <div class="model-toggle">
+      <button id="btn-claude" class="active-claude" onclick="switchModel('claude')">Claude</button>
+      <button id="btn-gemini" onclick="switchModel('gemini')">Gemini</button>
+    </div>
+    <button class="toggle-annotations" id="btn-toggle" onclick="toggleSidebar()">批注 ON</button>
+  </div>
+</div>
+
+<!-- ===== Main Content ===== -->
+<div class="main" id="main">
+
+  <!-- Reader -->
+  <div class="reader" id="reader">
+
+    <!-- Page 80 -->
+    <div class="page-block" id="page-80">
+      <div class="page-label">第 80 页</div>
+      <p>问题，人物模型给我们提供一种精确思考和交流的方法。<span class="anchor-highlight" data-anno="claude-0,gemini-0">人物模型并非真正的人，但它们来源于研究中众多真实用户的行为和动机。换句话说，人物模型是"合成原型"(composite archetype), 建立在调查过程中发现的行为模式基础上。</span>我们合成原型正式定型，为产品设计提供支撑。通过使用人物模型，我们能理解特定情境下用户的目标，这是构思并确定设计概念的重要工具。</p>
+
+      <p>和其他许多强有力的工具一样，人物模型虽然概念简单，使用起来却十分复杂，需要精心处理。<span class="anchor-highlight" data-anno="gemini-1">按照固定套路来草草地拼凑出几个用户档案是不行的，更不能在职位旁边贴个头像图片就称之为"人物模型"。</span>要想让人物模型成为设计利器，必须十分严格和细致地辨别用户行为中那些显著而有意义的模式，并且把它们转变成能够切实代表各色用户的原型。</p>
+
+      <p><span class="anchor-highlight" data-anno="gemini-2">当然，交互设计者还可以使用其他一些有用的工具，比如工作流程模型和物理模型等，但我们发现人物模型这个工具最为有效，</span>而且可以将其他建模手段的优秀方法运用在人物模型上。</p>
+
+      <p>本章重点讨论人物模型及其目标，结尾处将简要谈谈其他模型。</p>
+
+      <h3>人物模型的力量</h3>
+
+      <p><span class="anchor-highlight" data-anno="claude-1,gemini-3">要创建一个能够满足多样化用户受众的产品时，逻辑上讲，功能应该尽可能广泛，以满足最多的用户。然而这种逻辑有缺陷。满足广大用户需求的最佳方式是，为具有特定需要的特定个体类型设计。</span></p>
+
+      <p>任意扩展产品功能，涵盖很多受众时，只会增加所有用户的认知负担及导航成本。能够取悦某些用户的功能设置可能会对其他用户造成困扰。</p>
+
+      <div class="figure-caption">图 3-1 想要设计一款让所有司机都满意的汽车，最后出来的车虽然囊括所有功能，却没人喜欢。今天的软件设计也是一样，企图满足过多的用户，结果导致满意度下降。</div>
+    </div>
+
+    <!-- Page 81 -->
+    <div class="page-block" id="page-81">
+      <div class="page-label">第 81 页</div>
+
+      <p>这种方法的关键在于首先要选择正确的设计对象，即能代表最广大关键人群需要的用户。之后，将这些个体进行优先级排序，确保满足最重要人群需求的同时，不会损害次重要个体需求。人物模型为不同类型用户及其不同需求提供了强有力的交流手段，有助于帮助设计师决定哪些用户最为重要，从而在形式和行为上做出满足符合他们的设计。</p>
+
+      <div class="figure-caption">图 3-2 针对不同人群的不同目标设计相应的汽车，创造出的设计会让与目标司机相似的人群感到满意。同样的道理也适用于数字产品和软件的设计开发。</div>
+
+      <h3>人物模型作为设计工具的优势</h3>
+
+      <p><span class="anchor-highlight" data-anno="claude-2,gemini-5">人物模型是一种强有力、多用途的设计工具，有助于克服困扰数字产品开发过程中的若干难题，</span>它能够在以下方面提供帮助：</p>
+
+      <p>确定产品的功能及行为。人物模型的目标和任务奠定了整个设计的基础。</p>
+      <p>同利益相关者、开发人员和其他设计师交流。人物模型为讨论设计决策提供了共同语言，并有助于确保设计流程的每一步都能以用户为中心。</p>
+      <p>就设计意见达成共识和承诺。共同语言铸就共同理解。有了人物模型，就减少了对图形模型阐释的需要，就更容易采用叙述式结构来理解用户行为的细微差别。</p>
+      <p>衡量设计的效率。我们可以像在成形过程中面对真实用户一样，用人物模型对设计方案进行测试。尽管这并不能替代真实用户的需求，但它为设计者尝试解决设计难题提供了有力的现实依据。</p>
+    </div>
+
+    <!-- Page 82 -->
+    <div class="page-block" id="page-82">
+      <div class="page-label">第 82 页</div>
+
+      <p>助力市场营销和销售规划等与产品相关的其他工作。人物模型为营销活动、组织架构、客户支持中心和其他战略规划活动提供信息。产品开发之外的其他业务部门也期望对用户有完善详细的了解，因此他们通常对人物模型也非常感兴趣。</p>
+
+      <h3>人物模型有助于避免各种设计陷阱</h3>
+
+      <p>人物模型能够解决产品开发过程中出现的以下三个设计问题：弹性用户、自我参考设计、边缘功能设计。</p>
+
+      <h3>弹性用户</h3>
+
+      <p>虽然满足用户是我们的目标，但"用户"这一术语用于特定设计问题和场景时，很容易引发问题。<span class="anchor-highlight" data-anno="claude-3,gemini-4">"用户"一词并不精确严密，作为一种设计工具来说存在一定危险，因为产品团队每个人对于用户及其需求都有自己的理解。到了做决定的时候，"用户"成了弹性概念，为了适应团队中强势者的观点和假设，很容易被扭曲变形。</span></p>
+
+      <p>当产品开发团队发现用户用树形结构来显示操作嵌套层次的文件夹感觉比较容易时，他们就会将这些用户定义为通晓计算机的"专家用户"。而当程序员发现用户借助向导工具才能克服最困难的过程时，他们又将这些用户定义为无知的新手。为弹性用户设计就像给了产品团队许可，可以随心所欲地构建产品，同时仍能明显地服务于"用户"。</p>
+
+      <p>即便聚焦在用户角色或职衔而非具体原型上，也有可能使设计工作的生产效率低下。设计医疗产品时，可能认为所有护士的需求类似。可是如果稍有一些相关知识的话，就知道外科护士、儿童重症护理护士，以及手术室护士之间差异巨大，有着不同的态度、专长、需求和动机。</p>
+
+      <h3>自我参考设计</h3>
+
+      <p><span class="anchor-highlight" data-anno="gemini-6">自我参考设计指设计者或开发人员将自己的目标、动机、技巧和心理模型带入产品设计，</span>许多很炫的产品设计就属于这种情况。用户不会超越设计者这样的专业人员，这种设计方式仅仅适合很少数的产品，完全不适合大多数产品。</p>
+    </div>
+
+  </div>
+
+  <!-- Annotation Sidebar -->
+  <div class="sidebar" id="sidebar"></div>
+</div>
+
+<!-- Page Nav -->
+<div class="page-nav" id="page-nav">
+  <button onclick="scrollToPage(80)">80</button>
+  <button onclick="scrollToPage(81)">81</button>
+  <button onclick="scrollToPage(82)">82</button>
+  <span style="margin-left:8px; font-size: 12px; color:#bbb;">第 80-82 页 / 共 600 页</span>
+</div>
+
+<script>
+const ANNOTATIONS = {
+  claude: [
+    {
+      id: "claude-0",
+      type: "术语定义", icon: "📖",
+      content: "人物模型 = 基于真实用户行为模式的「合成原型」(composite archetype)。不是某个真人，而是从调研数据中提炼出的典型用户画像。注意和「用户画像」的区别——人物模型必须基于实际调研，不能凭空编造。",
+      page: 80
+    },
+    {
+      id: "claude-1",
+      type: "核心论点", icon: "🎯",
+      content: "本章最反直觉的核心观点：想满足所有人，反而谁都满足不了。正确做法是先选定最重要的特定用户类型，为他们设计，再兼顾其他人。汽车的类比很好记——没有一辆车能同时让赛车手和家庭主妇满意。",
+      page: 80
+    },
+    {
+      id: "claude-2",
+      type: "逻辑链梳理", icon: "⛓️",
+      content: "人物模型的三个实战价值：① 决定做什么功能（设计基础）→ ② 让团队说同一种语言（沟通工具）→ ③ 低成本验证设计方案（测试工具）。后面列的五点优势都可以归到这三类里。",
+      page: 81
+    },
+    {
+      id: "claude-3",
+      type: "核心论点", icon: "🎯",
+      content: "「弹性用户」是个很毒的陷阱——团队里谁嗓门大，「用户需求」就变成谁说了算。人物模型的作用就是把模糊的「用户」钉死成具体的人，让团队没法随意歪曲。护士的例子特别好：外科护士和儿童重症护士完全是两种人。",
+      page: 82
+    }
+  ],
+  gemini: [
+    {
+      id: "gemini-0",
+      type: "核心论点", icon: "🎯",
+      content: "人物模型是「合成原型」，基于对真实用户行为和动机的研究，用来精确思考和交流，是理解用户目标的重要工具。",
+      page: 80
+    },
+    {
+      id: "gemini-1",
+      type: "速读提示", icon: "⚡",
+      content: "这部分讲了人物模型并非拼凑，需要严格细致地提炼用户行为模式，别光贴头像。",
+      page: 80
+    },
+    {
+      id: "gemini-2",
+      type: "跨章节关联", icon: "🔗",
+      content: "前面提到了其他建模方法（工作流程、物理模型），这里说人物模型最有效，而且能吸收其他方法的优点，暗示了后续可能会讲到如何结合使用。",
+      page: 80
+    },
+    {
+      id: "gemini-3",
+      type: "核心论点", icon: "🎯",
+      content: "满足广泛用户需求的最佳方式是为特定用户类型设计，而非任意扩展功能，后者只会增加认知负担。",
+      page: 80
+    },
+    {
+      id: "gemini-4",
+      type: "术语定义", icon: "📖",
+      content: "「弹性用户」是指用户群体的概念在团队内部容易被扭曲，团队成员可以随意定义其需求来适应自己的观点。",
+      page: 82
+    },
+    {
+      id: "gemini-5",
+      type: "核心论点", icon: "🎯",
+      content: "人物模型能帮助定义产品功能和行为、与利益相关者沟通、达成设计共识、衡量设计效率，还能助力市场营销等跨部门工作。",
+      page: 81
+    },
+    {
+      id: "gemini-6",
+      type: "逻辑链梳理", icon: "⛓️",
+      content: "自我参考设计（基于设计者自身视角）容易导致产品不适合绝大多数用户，因为用户不可能都像设计者那样专业。",
+      page: 82
+    }
+  ]
+};
+
+let currentModel = 'claude';
+let sidebarVisible = true;
+
+function switchModel(model) {
+  currentModel = model;
+  document.getElementById('btn-claude').className = model === 'claude' ? 'active-claude' : '';
+  document.getElementById('btn-gemini').className = model === 'gemini' ? 'active-gemini' : '';
+  renderAnnotations();
+  updateHighlights();
+}
+
+function toggleSidebar() {
+  sidebarVisible = !sidebarVisible;
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('btn-toggle');
+  const main = document.getElementById('main');
+  const pageNav = document.getElementById('page-nav');
+  sidebar.classList.toggle('hidden', !sidebarVisible);
+  main.classList.toggle('sidebar-hidden', !sidebarVisible);
+  pageNav.classList.toggle('sidebar-hidden', !sidebarVisible);
+  btn.textContent = sidebarVisible ? '批注 ON' : '批注 OFF';
+  btn.classList.toggle('off', !sidebarVisible);
+  updateHighlights();
+}
+
+function renderAnnotations() {
+  const sidebar = document.getElementById('sidebar');
+  const annos = ANNOTATIONS[currentModel];
+  const cardClass = currentModel === 'claude' ? 'claude-card' : 'gemini-card';
+  const badgeClass = currentModel === 'claude' ? 'claude-badge' : 'gemini-badge';
+  const modelLabel = currentModel === 'claude' ? 'Claude' : 'Gemini 2.5 Flash Lite';
+
+  // Sort by page
+  const sorted = [...annos].sort((a, b) => a.page - b.page);
+
+  let html = `
+    <div class="sidebar-header">
+      批注 <span class="model-badge ${badgeClass}">${modelLabel}</span>
+      <span class="annotation-count">${sorted.length} 条</span>
+    </div>
+  `;
+
+  let lastPage = -1;
+  sorted.forEach(anno => {
+    if (anno.page !== lastPage) {
+      html += `<div style="font-size:11px;color:#ccc;margin:16px 0 8px 0;font-weight:600;">第 ${anno.page} 页</div>`;
+      lastPage = anno.page;
+    }
+    html += `
+      <div class="anno-card ${cardClass}" data-id="${anno.id}"
+           onmouseenter="highlightAnchor('${anno.id}', true)"
+           onmouseleave="highlightAnchor('${anno.id}', false)">
+        <div class="anno-type"><span class="icon">${anno.icon}</span> ${anno.type}</div>
+        <div class="anno-content">${anno.content}</div>
+      </div>
+    `;
+  });
+
+  sidebar.innerHTML = html;
+}
+
+function updateHighlights() {
+  document.querySelectorAll('.anchor-highlight').forEach(el => {
+    const ids = el.dataset.anno.split(',');
+    const hasMatch = ids.some(id => id.startsWith(currentModel));
+    if (sidebarVisible && hasMatch) {
+      el.classList.add(currentModel);
+      el.classList.remove(currentModel === 'claude' ? 'gemini' : 'claude');
+    } else {
+      el.classList.remove('claude', 'gemini');
+    }
+  });
+}
+
+function highlightAnchor(annoId, on) {
+  document.querySelectorAll('.anchor-highlight').forEach(el => {
+    const ids = el.dataset.anno.split(',');
+    if (ids.includes(annoId)) {
+      el.style.outline = on ? `2px solid ${currentModel === 'claude' ? '#c9a96e' : '#6a9fd8'}` : 'none';
+      el.style.outlineOffset = '2px';
+      if (on) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+}
+
+function scrollToPage(page) {
+  document.getElementById(`page-${page}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Init
+renderAnnotations();
+updateHighlights();
+</script>
+
+</body>
+</html>
