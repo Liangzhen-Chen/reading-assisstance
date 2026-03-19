@@ -11,12 +11,23 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   位置感知: { icon: "🗺️", color: "#909399" },
 };
 
+export const AVAILABLE_MODELS = [
+  { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+];
+
 interface Props {
   annotations: StoredAnnotation[];
   loading: boolean;
   visible: boolean;
   onToggle: () => void;
+  onRegenerate: () => void;
   currentPage: number;
+  model: string;
+  onModelChange: (model: string) => void;
 }
 
 export default function AnnotationPanel({
@@ -24,14 +35,21 @@ export default function AnnotationPanel({
   loading,
   visible,
   onToggle,
+  onRegenerate,
   currentPage,
+  model,
+  onModelChange,
 }: Props) {
   if (!visible) return null;
+
+  const modelLabel =
+    AVAILABLE_MODELS.find((m) => m.id === model)?.label || model;
 
   return (
     <aside className="fixed right-0 top-14 bottom-0 w-[340px] bg-white border-l border-[#e5e2db] overflow-y-auto z-40">
       <div className="p-5">
-        <div className="flex items-center justify-between mb-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-[#bbb] uppercase tracking-wide">
               批注
@@ -48,6 +66,38 @@ export default function AnnotationPanel({
           </button>
         </div>
 
+        {/* Model selector */}
+        <div className="flex items-center gap-2 mb-4">
+          <select
+            value={model}
+            onChange={(e) => onModelChange(e.target.value)}
+            className="flex-1 text-xs border border-[#e5e2db] rounded-md px-2 py-1.5 bg-white text-[#666] focus:outline-none focus:border-[#5b7f6a]"
+          >
+            {AVAILABLE_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={onRegenerate}
+            disabled={loading}
+            className="text-xs px-2.5 py-1.5 border border-[#e5e2db] rounded-md hover:bg-[#f5f4f0] text-[#666] disabled:opacity-40 transition-colors whitespace-nowrap"
+            title="清除缓存并重新生成本页批注"
+          >
+            {loading ? "生成中..." : "重新生成"}
+          </button>
+        </div>
+
+        {/* Model badge */}
+        {annotations.length > 0 && !loading && (
+          <div className="text-xs text-[#bbb] mb-3 flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#5b7f6a]" />
+            由 {modelLabel} 生成
+          </div>
+        )}
+
+        {/* Content */}
         {loading ? (
           <div className="flex flex-col items-center py-12 gap-3">
             <div className="w-6 h-6 border-2 border-[#5b7f6a] border-t-transparent rounded-full animate-spin" />

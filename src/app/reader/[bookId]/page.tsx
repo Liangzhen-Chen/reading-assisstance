@@ -8,6 +8,7 @@ import {
   updateBookProgress,
   getPageAnnotations,
   savePageAnnotations,
+  deletePageAnnotations,
   type StoredAnnotation,
 } from "@/lib/storage";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -28,6 +29,8 @@ export default function ReaderPage() {
   const [annotations, setAnnotations] = useState<StoredAnnotation[]>([]);
   const [annoLoading, setAnnoLoading] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-lite");
+  const [regenerateKey, setRegenerateKey] = useState(0);
 
   // Load PDF from IndexedDB
   useEffect(() => {
@@ -88,33 +91,31 @@ export default function ReaderPage() {
   }, [bookId, currentPage]);
 
   // Load or generate annotations for current page
-  useEffect(() => {
-    if (!pdf || !bookId) return;
-    let cancelled = false;
+  const fetchAnnotations = useCallback(
+    async (forceRegenerate = false) => {
+      if (!pdf || !bookId) return;
 
-    (async () => {
-      // Check cache first
-      const cached = await getPageAnnotations(bookId, currentPage);
-      if (cached) {
-        if (!cancelled) setAnnotations(cached.annotations);
-        return;
+      // Check cache first (unless forcing regeneration)
+      if (!forceRegenerate) {
+        const cached = await getPageAnnotations(bookId, currentPage);
+        if (cached) {
+          setAnnotations(cached.annotations);
+          return;
+        }
+      } else {
+        await deletePageAnnotations(bookId, currentPage);
       }
 
-      // Extract text and call API
-      if (!cancelled) {
-        setAnnoLoading(true);
-        setAnnotations([]);
-      }
+      setAnnoLoading(true);
+      setAnnotations([]);
 
       try {
         const { extractPageText } = await import("@/lib/pdfParser");
         const text = await extractPageText(pdf, currentPage);
 
         if (!text.trim()) {
-          if (!cancelled) {
-            setAnnotations([]);
-            setAnnoLoading(false);
-          }
+          setAnnotations([]);
+          setAnnoLoading(false);
           return;
         }
 
@@ -125,35 +126,46 @@ export default function ReaderPage() {
             bookTitle: title,
             pageText: text,
             pageNumber: currentPage,
+            model: selectedModel,
           }),
         });
 
         if (res.ok) {
           const data = await res.json();
           const annos: StoredAnnotation[] = data.annotations || [];
-          if (!cancelled) {
-            setAnnotations(annos);
-            await savePageAnnotations(bookId, currentPage, annos);
-          }
+          setAnnotations(annos);
+          await savePageAnnotations(
+            bookId,
+            currentPage,
+            annos,
+            data.model || selectedModel
+          );
         }
       } catch {
         // annotation generation failed silently
       } finally {
-        if (!cancelled) setAnnoLoading(false);
+        setAnnoLoading(false);
       }
-    })();
+    },
+    [pdf, bookId, currentPage, title, selectedModel]
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [pdf, bookId, currentPage, title]);
+  useEffect(() => {
+    if (pdf) fetchAnnotations();
+  }, [pdf, currentPage, fetchAnnotations, regenerateKey]);
+
+  const handleRegenerate = () => {
+    setRegenerateKey((k) => k + 1);
+    fetchAnnotations(true);
+  };
 
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
       )
         return;
       if (e.key === "ArrowRight" || e.key === "ArrowDown") {
@@ -271,7 +283,10 @@ export default function ReaderPage() {
         loading={annoLoading}
         visible={sidebarVisible}
         onToggle={() => setSidebarVisible(false)}
+        onRegenerate={handleRegenerate}
         currentPage={currentPage}
+        model={selectedModel}
+        onModelChange={setSelectedModel}
       />
 
       {/* Bottom Page Nav */}

@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { bookTitle, pageText, pageNumber } = await request.json();
+  const { bookTitle, pageText, pageNumber, model } = await request.json();
 
   if (!pageText || !pageNumber) {
     return NextResponse.json(
@@ -49,6 +49,17 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  const AVAILABLE_MODELS = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-2.5-pro",
+  ];
+  const selectedModel = AVAILABLE_MODELS.includes(model)
+    ? model
+    : "gemini-2.5-flash-lite";
 
   const userPrompt = `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。
 
@@ -59,7 +70,7 @@ ${pageText}`;
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,7 +107,7 @@ ${pageText}`;
     // Ensure page number is set correctly
     annotations = annotations.map((a) => ({ ...a, page: pageNumber }));
 
-    return NextResponse.json({ annotations });
+    return NextResponse.json({ annotations, model: selectedModel });
   } catch (err) {
     return NextResponse.json(
       { error: "Failed to call Gemini API", detail: String(err) },

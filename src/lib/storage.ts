@@ -15,6 +15,7 @@ export interface PageAnnotations {
   bookId: string;
   page: number;
   annotations: StoredAnnotation[];
+  model: string;
   generatedAt: number;
 }
 
@@ -106,7 +107,8 @@ function annotationKey(bookId: string, page: number): string {
 export async function savePageAnnotations(
   bookId: string,
   page: number,
-  annotations: StoredAnnotation[]
+  annotations: StoredAnnotation[],
+  model: string
 ): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -116,6 +118,7 @@ export async function savePageAnnotations(
       bookId,
       page,
       annotations,
+      model,
       generatedAt: Date.now(),
     } satisfies PageAnnotations);
     tx.oncomplete = () => resolve();
@@ -133,5 +136,18 @@ export async function getPageAnnotations(
     const req = tx.objectStore(ANNOTATIONS_STORE).get(annotationKey(bookId, page));
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deletePageAnnotations(
+  bookId: string,
+  page: number
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ANNOTATIONS_STORE, "readwrite");
+    tx.objectStore(ANNOTATIONS_STORE).delete(annotationKey(bookId, page));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
