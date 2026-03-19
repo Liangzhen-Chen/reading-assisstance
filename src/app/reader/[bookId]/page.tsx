@@ -114,23 +114,39 @@ export default function ReaderPage() {
       try {
         const { extractPageText } = await import("@/lib/pdfParser");
         const text = await extractPageText(pdf, currentPage);
+        const hasText = text.trim().length > 30;
 
-        if (!text.trim()) {
-          setAnnotations([]);
-          setAnnoLoading(false);
-          setAnnoError("本页无可提取的文字内容");
-          return;
+        // Build request body — use text if available, otherwise capture page as image
+        let body: Record<string, unknown>;
+        if (hasText) {
+          body = {
+            bookTitle: title,
+            pageText: text,
+            pageNumber: currentPage,
+            model: selectedModel,
+          };
+        } else {
+          // Scanned PDF: render page to image and send to Gemini vision
+          const page = await pdf.getPage(currentPage);
+          const vp = page.getViewport({ scale: 2 });
+          const offscreen = document.createElement("canvas");
+          offscreen.width = vp.width;
+          offscreen.height = vp.height;
+          await page.render({ canvas: offscreen, viewport: vp }).promise;
+          const dataUrl = offscreen.toDataURL("image/png");
+          const base64 = dataUrl.split(",")[1];
+          body = {
+            bookTitle: title,
+            pageImage: base64,
+            pageNumber: currentPage,
+            model: selectedModel,
+          };
         }
 
         const res = await fetch("/api/annotate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bookTitle: title,
-            pageText: text,
-            pageNumber: currentPage,
-            model: selectedModel,
-          }),
+          body: JSON.stringify(body),
         });
 
         if (res.ok) {

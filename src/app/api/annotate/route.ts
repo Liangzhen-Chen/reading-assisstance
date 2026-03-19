@@ -32,6 +32,14 @@ const SYSTEM_PROMPT = `你是一个阅读批注助手，语气像一个聪明的
   }
 ]`;
 
+const AVAILABLE_MODELS = [
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-2.5-pro",
+];
+
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -41,32 +49,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { bookTitle, pageText, pageNumber, model } = await request.json();
+  const { bookTitle, pageText, pageImage, pageNumber, model } =
+    await request.json();
 
-  if (!pageText || !pageNumber) {
+  if (!pageNumber || (!pageText && !pageImage)) {
     return NextResponse.json(
-      { error: "Missing pageText or pageNumber" },
+      { error: "Missing pageNumber, and both pageText and pageImage" },
       { status: 400 }
     );
   }
 
-  const AVAILABLE_MODELS = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-2.0-flash",
-    "gemini-2.5-pro",
-  ];
   const selectedModel = AVAILABLE_MODELS.includes(model)
     ? model
     : "gemini-2.5-flash-lite";
 
-  const userPrompt = `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。
+  // Build content parts — text or image
+  const contentParts: Record<string, unknown>[] = [];
 
-请生成阅读批注。
-
---- 以下为原文 ---
-${pageText}`;
+  if (pageImage) {
+    // Vision mode: send page as image
+    contentParts.push({
+      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的扫描图片。请先识别图中的文字内容，然后生成阅读批注。`,
+    });
+    contentParts.push({
+      inline_data: {
+        mime_type: "image/png",
+        data: pageImage, // base64
+      },
+    });
+  } else {
+    contentParts.push({
+      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。\n\n请生成阅读批注。\n\n--- 以下为原文 ---\n${pageText}`,
+    });
+  }
 
   try {
     const res = await fetch(
@@ -76,7 +91,7 @@ ${pageText}`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ parts: [{ text: userPrompt }] }],
+          contents: [{ parts: contentParts }],
           generationConfig: {
             temperature: 0.7,
             responseMimeType: "application/json",
@@ -104,7 +119,6 @@ ${pageText}`;
       annotations = [];
     }
 
-    // Ensure page number is set correctly
     annotations = annotations.map((a) => ({ ...a, page: pageNumber }));
 
     return NextResponse.json({ annotations, model: selectedModel });
