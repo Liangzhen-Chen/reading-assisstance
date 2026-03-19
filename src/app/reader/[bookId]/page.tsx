@@ -44,12 +44,17 @@ export default function ReaderPage() {
 
       try {
         const page = await pdf.getPage(pageNum);
+        const dpr = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale });
         const canvas = canvasRef.current;
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
 
-        await page.render({ canvas, viewport }).promise;
+        canvas.width = Math.floor(viewport.width * dpr);
+        canvas.height = Math.floor(viewport.height * dpr);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+        const scaledViewport = page.getViewport({ scale: scale * dpr });
+        await page.render({ canvas, viewport: scaledViewport }).promise;
       } catch {
         // render cancelled or failed
       } finally {
@@ -102,6 +107,16 @@ export default function ReaderPage() {
     <div className="min-h-screen bg-[#faf9f6] flex flex-col">
       {/* Top Bar */}
       <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-[#e5e2db] flex items-center justify-between px-7">
+        <div className="flex items-center gap-3">
+        <a
+          href="/"
+          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f4f0] text-[#666] transition-colors"
+          title="返回书架"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </a>
         <a
           href="/"
           className="flex items-center gap-2 text-[#5b7f6a] font-bold text-lg"
@@ -120,6 +135,7 @@ export default function ReaderPage() {
           </svg>
           ReadLens
         </a>
+        </div>
 
         <div className="text-sm text-[#666] max-w-[400px] truncate">
           {title}
