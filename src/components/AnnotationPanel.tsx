@@ -26,8 +26,8 @@ export const DENSITY_OPTIONS = [
 ];
 
 export const STYLE_OPTIONS = [
-  { id: "casual", label: "轻松", desc: "像朋友聊天" },
-  { id: "balanced", label: "学长", desc: "有见解不居高临下" },
+  { id: "casual", label: "轻松", desc: "口语化，简短直接" },
+  { id: "balanced", label: "平衡", desc: "简洁有见地" },
   { id: "academic", label: "学术", desc: "专业术语+方法论" },
 ];
 
