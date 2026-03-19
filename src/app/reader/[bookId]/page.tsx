@@ -31,6 +31,7 @@ export default function ReaderPage() {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-lite");
   const [regenerateKey, setRegenerateKey] = useState(0);
+  const [annoError, setAnnoError] = useState("");
 
   // Load PDF from IndexedDB
   useEffect(() => {
@@ -108,6 +109,7 @@ export default function ReaderPage() {
 
       setAnnoLoading(true);
       setAnnotations([]);
+      setAnnoError("");
 
       try {
         const { extractPageText } = await import("@/lib/pdfParser");
@@ -116,6 +118,7 @@ export default function ReaderPage() {
         if (!text.trim()) {
           setAnnotations([]);
           setAnnoLoading(false);
+          setAnnoError("本页无可提取的文字内容");
           return;
         }
 
@@ -140,9 +143,14 @@ export default function ReaderPage() {
             annos,
             data.model || selectedModel
           );
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setAnnoError(
+            `API 错误 ${res.status}: ${errData.error || "未知错误"}`
+          );
         }
-      } catch {
-        // annotation generation failed silently
+      } catch (err) {
+        setAnnoError(`生成失败: ${String(err)}`);
       } finally {
         setAnnoLoading(false);
       }
@@ -287,6 +295,7 @@ export default function ReaderPage() {
         currentPage={currentPage}
         model={selectedModel}
         onModelChange={setSelectedModel}
+        error={annoError}
       />
 
       {/* Bottom Page Nav */}

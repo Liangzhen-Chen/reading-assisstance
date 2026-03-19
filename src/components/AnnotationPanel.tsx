@@ -28,6 +28,7 @@ interface Props {
   currentPage: number;
   model: string;
   onModelChange: (model: string) => void;
+  error?: string;
 }
 
 export default function AnnotationPanel({
@@ -39,6 +40,7 @@ export default function AnnotationPanel({
   currentPage,
   model,
   onModelChange,
+  error,
 }: Props) {
   if (!visible) return null;
 
@@ -102,6 +104,13 @@ export default function AnnotationPanel({
           <div className="flex flex-col items-center py-12 gap-3">
             <div className="w-6 h-6 border-2 border-[#5b7f6a] border-t-transparent rounded-full animate-spin" />
             <p className="text-sm text-[#999]">AI 正在生成批注...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-sm text-[#999] mb-2">本页暂无批注</p>
+            <p className="text-xs text-red-400 bg-red-50 rounded-lg p-3">
+              {error}
+            </p>
           </div>
         ) : annotations.length === 0 ? (
           <div className="text-center py-12">
