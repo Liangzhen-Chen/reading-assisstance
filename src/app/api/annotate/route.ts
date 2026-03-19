@@ -154,8 +154,16 @@ export async function POST(request: NextRequest) {
 
     if (!res.ok) {
       const err = await res.text();
+      const friendly =
+        res.status === 429
+          ? "请求太频繁，请稍后再试（429）"
+          : res.status === 403
+            ? "API 密钥无效或已过期（403）"
+            : res.status === 404
+              ? "模型不可用，请切换其他模型（404）"
+              : `Gemini API 错误（${res.status}）`;
       return NextResponse.json(
-        { error: `Gemini API error: ${res.status}`, detail: err },
+        { error: friendly, detail: err },
         { status: res.status }
       );
     }

@@ -165,11 +165,31 @@ export default function AnnotationPanel({
             <p className="text-sm text-[#999]">AI 正在生成批注...</p>
           </div>
         ) : error ? (
-          <div className="text-center py-12">
-            <p className="text-sm text-[#999] mb-2">本页暂无批注</p>
-            <p className="text-xs text-red-400 bg-red-50 rounded-lg p-3">
-              {error}
+          <div className="text-center py-10 px-2">
+            <div className="text-2xl mb-3">
+              {error.includes("429") ? "⏳" : "⚠️"}
+            </div>
+            <p className="text-sm text-[#666] mb-1.5">
+              {error.includes("429")
+                ? "请求太频繁，API 限流了"
+                : error.includes("无可提取")
+                  ? "本页是扫描图片或无文字内容"
+                  : "批注生成失败"}
             </p>
+            <p className="text-xs text-[#999] mb-4">
+              {error.includes("429")
+                ? "免费额度有限，稍等一分钟再试"
+                : error.includes("无可提取")
+                  ? "正在尝试用图片识别，可能需要更长时间"
+                  : error}
+            </p>
+            <button
+              onClick={onRegenerate}
+              disabled={loading}
+              className="text-xs px-4 py-2 bg-[#5b7f6a] text-white rounded-lg hover:bg-[#4d6e5b] transition-colors disabled:opacity-40"
+            >
+              重试
+            </button>
           </div>
         ) : annotations.length === 0 ? (
           <div className="text-center py-12">
