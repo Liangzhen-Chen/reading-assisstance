@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { getBook, updateBookProgress } from "@/lib/storage";
+import {
+  getBook,
+  updateBookProgress,
+  getPageAnnotations,
+  savePageAnnotations,
+  type StoredAnnotation,
+} from "@/lib/storage";
+import AnnotationPanel from "@/components/AnnotationPanel";
 
 export default function ReaderPage() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -16,6 +23,11 @@ export default function ReaderPage() {
   const [scale, setScale] = useState(1.5);
   const [loading, setLoading] = useState(true);
   const renderingRef = useRef(false);
+
+  // Annotation state
+  const [annotations, setAnnotations] = useState<StoredAnnotation[]>([]);
+  const [annoLoading, setAnnoLoading] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
 
   // Load PDF from IndexedDB
   useEffect(() => {
@@ -75,9 +87,75 @@ export default function ReaderPage() {
     }
   }, [bookId, currentPage]);
 
+  // Load or generate annotations for current page
+  useEffect(() => {
+    if (!pdf || !bookId) return;
+    let cancelled = false;
+
+    (async () => {
+      // Check cache first
+      const cached = await getPageAnnotations(bookId, currentPage);
+      if (cached) {
+        if (!cancelled) setAnnotations(cached.annotations);
+        return;
+      }
+
+      // Extract text and call API
+      if (!cancelled) {
+        setAnnoLoading(true);
+        setAnnotations([]);
+      }
+
+      try {
+        const { extractPageText } = await import("@/lib/pdfParser");
+        const text = await extractPageText(pdf, currentPage);
+
+        if (!text.trim()) {
+          if (!cancelled) {
+            setAnnotations([]);
+            setAnnoLoading(false);
+          }
+          return;
+        }
+
+        const res = await fetch("/api/annotate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookTitle: title,
+            pageText: text,
+            pageNumber: currentPage,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const annos: StoredAnnotation[] = data.annotations || [];
+          if (!cancelled) {
+            setAnnotations(annos);
+            await savePageAnnotations(bookId, currentPage, annos);
+          }
+        }
+      } catch {
+        // annotation generation failed silently
+      } finally {
+        if (!cancelled) setAnnoLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdf, bookId, currentPage, title]);
+
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       if (e.key === "ArrowRight" || e.key === "ArrowDown") {
         setCurrentPage((p) => Math.min(p + 1, totalPages));
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
@@ -108,33 +186,41 @@ export default function ReaderPage() {
       {/* Top Bar */}
       <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-[#e5e2db] flex items-center justify-between px-7">
         <div className="flex items-center gap-3">
-        <a
-          href="/"
-          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f4f0] text-[#666] transition-colors"
-          title="返回书架"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </a>
-        <a
-          href="/"
-          className="flex items-center gap-2 text-[#5b7f6a] font-bold text-lg"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="w-5 h-5"
+          <a
+            href="/"
+            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f4f0] text-[#666] transition-colors"
+            title="返回书架"
           >
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-          </svg>
-          ReadLens
-        </a>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-4 h-4"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </a>
+          <a
+            href="/"
+            className="flex items-center gap-2 text-[#5b7f6a] font-bold text-lg"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-5 h-5"
+            >
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
+            ReadLens
+          </a>
         </div>
 
         <div className="text-sm text-[#666] max-w-[400px] truncate">
@@ -157,16 +243,45 @@ export default function ReaderPage() {
           >
             A+
           </button>
+          <button
+            onClick={() => setSidebarVisible((v) => !v)}
+            className={`ml-2 px-3 py-1 text-xs border rounded-md transition-colors ${
+              sidebarVisible
+                ? "border-[#5b7f6a] bg-[#eef4f0] text-[#5b7f6a]"
+                : "border-[#e5e2db] text-[#999] hover:bg-[#f5f4f0]"
+            }`}
+          >
+            批注 {sidebarVisible ? "ON" : "OFF"}
+          </button>
         </div>
       </header>
 
       {/* Reader area */}
-      <main className="flex-1 mt-14 mb-16 flex justify-center overflow-auto py-8">
+      <main
+        className={`flex-1 mt-14 mb-16 flex justify-center overflow-auto py-8 transition-all ${
+          sidebarVisible ? "mr-[340px]" : ""
+        }`}
+      >
         <canvas ref={canvasRef} className="shadow-lg" />
       </main>
 
+      {/* Annotation Sidebar */}
+      <AnnotationPanel
+        annotations={annotations}
+        loading={annoLoading}
+        visible={sidebarVisible}
+        onToggle={() => setSidebarVisible(false)}
+        currentPage={currentPage}
+      />
+
       {/* Bottom Page Nav */}
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-white border border-[#e5e2db] rounded-xl px-4 py-2 shadow-lg">
+      <nav
+        className={`fixed bottom-6 flex items-center gap-1.5 bg-white border border-[#e5e2db] rounded-xl px-4 py-2 shadow-lg transition-all ${
+          sidebarVisible
+            ? "left-[calc(50%-170px)] -translate-x-1/2"
+            : "left-1/2 -translate-x-1/2"
+        }`}
+      >
         <button
           onClick={() => goToPage(1)}
           disabled={currentPage <= 1}

@@ -1,6 +1,22 @@
 const DB_NAME = "readlens";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const BOOKS_STORE = "books";
+const ANNOTATIONS_STORE = "annotations";
+
+export interface StoredAnnotation {
+  type: string;
+  content: string;
+  anchor_text: string;
+  page: number;
+}
+
+export interface PageAnnotations {
+  id: string; // bookId:pageNum
+  bookId: string;
+  page: number;
+  annotations: StoredAnnotation[];
+  generatedAt: number;
+}
 
 export interface Book {
   id: string;
@@ -19,6 +35,10 @@ function openDB(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(BOOKS_STORE)) {
         db.createObjectStore(BOOKS_STORE, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(ANNOTATIONS_STORE)) {
+        const store = db.createObjectStore(ANNOTATIONS_STORE, { keyPath: "id" });
+        store.createIndex("bookId", "bookId", { unique: false });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -75,4 +95,43 @@ export async function updateBookProgress(
     book.lastPage = lastPage;
     await saveBook(book);
   }
+}
+
+// --- Annotations ---
+
+function annotationKey(bookId: string, page: number): string {
+  return `${bookId}:${page}`;
+}
+
+export async function savePageAnnotations(
+  bookId: string,
+  page: number,
+  annotations: StoredAnnotation[]
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ANNOTATIONS_STORE, "readwrite");
+    tx.objectStore(ANNOTATIONS_STORE).put({
+      id: annotationKey(bookId, page),
+      bookId,
+      page,
+      annotations,
+      generatedAt: Date.now(),
+    } satisfies PageAnnotations);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getPageAnnotations(
+  bookId: string,
+  page: number
+): Promise<PageAnnotations | undefined> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ANNOTATIONS_STORE, "readonly");
+    const req = tx.objectStore(ANNOTATIONS_STORE).get(annotationKey(bookId, page));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
