@@ -164,19 +164,46 @@ export default function UploadPage() {
           const data = await res.json();
           const batchChapters: BookChapter[] = data.chapters || [];
 
-          // Merge CONTINUE chapters
+          // Merge CONTINUE chapters and deduplicate
           for (const ch of batchChapters) {
             if (
               ch.title === "CONTINUE" &&
               accumulatedChapters.length > 0
             ) {
+              // Continuation of previous chapter
               const last =
                 accumulatedChapters[accumulatedChapters.length - 1];
               last.endPage = ch.endPage;
               last.sections = [...(last.sections || []), ...(ch.sections || [])];
               if (ch.summary) last.summary += " " + ch.summary;
             } else {
-              accumulatedChapters.push(ch);
+              // Deduplicate: if a chapter with very similar title and overlapping
+              // page range already exists, merge instead of adding a duplicate
+              const normalize = (s: string) => s.replace(/[\s\-_:：·.。]+/g, "").toLowerCase();
+              const existing = accumulatedChapters.find(
+                (prev) =>
+                  normalize(prev.title) === normalize(ch.title) ||
+                  (Math.abs(prev.startPage - ch.startPage) <= 2 &&
+                    prev.title.length > 3 &&
+                    ch.title.length > 3 &&
+                    (normalize(prev.title).includes(normalize(ch.title)) ||
+                      normalize(ch.title).includes(normalize(prev.title))))
+              );
+
+              if (existing) {
+                // Merge into existing — keep the longer/better title
+                if (ch.title.length > existing.title.length) {
+                  existing.title = ch.title;
+                }
+                existing.endPage = Math.max(existing.endPage, ch.endPage);
+                existing.startPage = Math.min(existing.startPage, ch.startPage);
+                existing.sections = [...(existing.sections || []), ...(ch.sections || [])];
+                if (ch.summary && ch.summary.length > existing.summary.length) {
+                  existing.summary = ch.summary;
+                }
+              } else {
+                accumulatedChapters.push(ch);
+              }
             }
           }
 

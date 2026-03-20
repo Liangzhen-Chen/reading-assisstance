@@ -69,6 +69,8 @@ function ErrorDisplay({ error, onRetry, loading }: { error: string; onRetry: () 
   );
 }
 
+export const ANNOTATION_TYPES = Object.keys(TYPE_CONFIG) as Array<keyof typeof TYPE_CONFIG>;
+
 interface Props {
   annotations: StoredAnnotation[];
   loading: boolean;
@@ -84,6 +86,8 @@ interface Props {
   style: string;
   onStyleChange: (style: string) => void;
   error?: string;
+  enabledTypes: string[];
+  onEnabledTypesChange: (types: string[]) => void;
 }
 
 export default function AnnotationPanel({
@@ -101,6 +105,8 @@ export default function AnnotationPanel({
   style,
   onStyleChange,
   error,
+  enabledTypes,
+  onEnabledTypesChange,
 }: Props) {
   if (!visible) return null;
 
@@ -160,7 +166,7 @@ export default function AnnotationPanel({
         </div>
 
         {/* Settings row: density + style */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-2">
           {/* Density toggle */}
           <div className="flex-1 flex bg-[#f5f4f0] rounded-lg p-0.5">
             {DENSITY_OPTIONS.map((d) => (
@@ -198,6 +204,35 @@ export default function AnnotationPanel({
           </div>
         </div>
 
+        {/* Annotation type filter chips */}
+        <div className="flex flex-wrap gap-1 mb-4">
+          {ANNOTATION_TYPES.map((type) => {
+            const cfg = TYPE_CONFIG[type];
+            const isEnabled = enabledTypes.includes(type);
+            return (
+              <button
+                key={type}
+                onClick={() => {
+                  if (isEnabled) {
+                    onEnabledTypesChange(enabledTypes.filter((t) => t !== type));
+                  } else {
+                    onEnabledTypesChange([...enabledTypes, type]);
+                  }
+                }}
+                className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                  isEnabled
+                    ? "border-current bg-white"
+                    : "border-[#e5e2db] bg-[#f5f4f0] text-[#ccc]"
+                }`}
+                style={isEnabled ? { color: cfg.color } : undefined}
+              >
+                <span>{cfg.icon}</span>
+                {type}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Model badge */}
         {annotations.length > 0 && !loading && (
           <div className="text-xs text-[#bbb] mb-3 flex items-center gap-1.5">
@@ -207,48 +242,60 @@ export default function AnnotationPanel({
         )}
 
         {/* Content */}
-        {loading ? (
-          <div className="flex flex-col items-center py-12 gap-3">
-            <div className="w-6 h-6 border-2 border-[#5b7f6a] border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-[#999]">AI 正在生成批注...</p>
-          </div>
-        ) : error ? (
-          <ErrorDisplay error={error} onRetry={onRegenerate} loading={loading} />
-        ) : annotations.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-sm text-[#999]">本页暂无批注</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="text-xs text-[#ccc] font-semibold mb-2">
-              第 {currentPage} 页
+        {(() => {
+          const filteredAnnotations = annotations.filter((a) => enabledTypes.includes(a.type));
+          return loading ? (
+            <div className="flex flex-col items-center py-12 gap-3">
+              <div className="w-6 h-6 border-2 border-[#5b7f6a] border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-[#999]">AI 正在生成批注...</p>
             </div>
-            {annotations.map((anno, i) => {
-              const cfg = TYPE_CONFIG[anno.type] || {
-                icon: "💬",
-                color: "#999",
-              };
-              return (
-                <div
-                  key={i}
-                  className="rounded-xl p-3.5 border border-[#eee] hover:shadow-md transition-shadow"
-                  style={{ borderLeftWidth: 3, borderLeftColor: cfg.color }}
-                >
+          ) : error ? (
+            <ErrorDisplay error={error} onRetry={onRegenerate} loading={loading} />
+          ) : filteredAnnotations.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-sm text-[#999]">
+                {annotations.length === 0 ? "本页暂无批注" : "所有批注已被筛选隐藏"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs text-[#ccc] font-semibold mb-2">
+                第 {currentPage} 页
+              </div>
+              {filteredAnnotations.map((anno, i) => {
+                const cfg = TYPE_CONFIG[anno.type] || {
+                  icon: "💬",
+                  color: "#999",
+                };
+                return (
                   <div
-                    className="text-xs font-bold mb-1.5 flex items-center gap-1.5"
-                    style={{ color: cfg.color }}
+                    key={i}
+                    className="rounded-xl p-3.5 border border-[#eee] hover:shadow-md transition-shadow"
+                    style={{ borderLeftWidth: 3, borderLeftColor: cfg.color }}
                   >
-                    <span>{cfg.icon}</span>
-                    {anno.type}
+                    <div
+                      className="text-xs font-bold mb-1.5 flex items-center gap-1.5"
+                      style={{ color: cfg.color }}
+                    >
+                      <span>{cfg.icon}</span>
+                      {anno.type}
+                    </div>
+                    <div className="text-sm leading-relaxed text-[#444]">
+                      {anno.content}
+                    </div>
+                    {anno.anchor_text && anno.anchor_text.length > 3 && (
+                      <div
+                        className="mt-2 text-xs italic text-[#999] border-l-2 border-[#e5e2db] pl-2 leading-relaxed"
+                      >
+                        {"\u300C"}{anno.anchor_text}{"\u300D"}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm leading-relaxed text-[#444]">
-                    {anno.content}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     </aside>
   );

@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
   // Build style instruction
   const STYLE_MAP: Record<string, string> = {
     casual:
-      "语气非常口语化，像朋友聊天：「卧槽这个厉害」「直接跳过」「划重点！」。可以用网络用语，简短粗暴。",
+      "语气口语化，像朋友聊天：「这个厉害」「直接跳过」「划重点」。可以用轻松的表达，简短直接。但有以下限制：禁止使用脏话或粗俗用语；感叹号每条批注最多用 1 个；保持轻松对话感但不要幼稚或轻浮；不要用「哇」「天哪」「绝了」「牛逼」「我靠」等过于浮夸的语气词。",
     balanced:
       "语气像一个聪明的学长：有见解但不居高临下，偶尔幽默，用符号简写。这是默认风格。",
     academic:

@@ -16,7 +16,7 @@ import {
   type BookStructure,
 } from "@/lib/storage";
 import { resolveAnnotationContext } from "@/lib/structureContext";
-import AnnotationPanel from "@/components/AnnotationPanel";
+import AnnotationPanel, { ANNOTATION_TYPES } from "@/components/AnnotationPanel";
 import TableOfContents from "@/components/TableOfContents";
 
 export default function ReaderPage() {
@@ -41,6 +41,7 @@ export default function ReaderPage() {
   const [style, setStyle] = useState("balanced");
   const [regenerateKey, setRegenerateKey] = useState(0);
   const [annoError, setAnnoError] = useState("");
+  const [enabledTypes, setEnabledTypes] = useState<string[]>([...ANNOTATION_TYPES]);
 
   // Structure & TOC state
   const [structure, setStructure] = useState<BookStructure | null>(null);
@@ -506,6 +507,8 @@ export default function ReaderPage() {
         style={style}
         onStyleChange={setStyle}
         error={annoError}
+        enabledTypes={enabledTypes}
+        onEnabledTypesChange={setEnabledTypes}
       />
 
       {/* Bottom Page Nav */}

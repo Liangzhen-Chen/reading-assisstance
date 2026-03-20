@@ -65,6 +65,9 @@ ${langRule}
 - 标题保留原书的语言和格式（如原书写 "Chapter 3" 就保留，写「第三章」也保留）
 - 不要自行翻译或改写标题
 - 同一层级的标题风格应该一致
+- All titles must have consistent capitalization (if English, use Title Case)
+- Empty or blank titles are NOT allowed — if you can't determine a title, use a descriptive placeholder like "Untitled Section (p.XX)" where XX is the start page number
+- Section/subsection titles that are just 1-2 generic words (e.g. "Introduction", "Summary") should include more context from the content to be distinguishable (e.g. "Introduction: The Rise of Machine Learning")
 
 ## 识别规则
 - 章标题通常有明显标记：「第X章」「Chapter X」「Part X」或独占一页的大标题
@@ -77,6 +80,8 @@ ${langRule}
 如果提供了 previousChapters，说明前面的批次已经识别了一些章节。最后一章可能还没结束：
 - 如果这批页面的开头仍属于上一章，在返回结果中第一个 chapter 的 title 写 "CONTINUE"，表示它是上一章的延续
 - 新发现的章节正常列出
+- **绝对不要重复输出 previousChapters 中已经存在的章节**。只输出这批页面中新发现的章节或 CONTINUE
+- 如果某个章节已经在 previousChapters 中出现，不要再次输出它
 
 ## 概括要求
 - summary 不要复述章节标题，要概括实际内容
