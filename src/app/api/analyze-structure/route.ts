@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
         if (ch.title === "CONTINUE" && allChapters.length > 0) {
           const last = allChapters[allChapters.length - 1];
           last.endPage = ch.endPage;
-          last.sections = [...last.sections, ...ch.sections];
+          last.sections = [...(last.sections || []), ...(ch.sections || [])];
           if (ch.summary) last.summary += " " + ch.summary;
         } else {
           allChapters.push(ch);

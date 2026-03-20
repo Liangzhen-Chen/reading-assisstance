@@ -173,7 +173,7 @@ export default function UploadPage() {
               const last =
                 accumulatedChapters[accumulatedChapters.length - 1];
               last.endPage = ch.endPage;
-              last.sections = [...last.sections, ...(ch.sections || [])];
+              last.sections = [...(last.sections || []), ...(ch.sections || [])];
               if (ch.summary) last.summary += " " + ch.summary;
             } else {
               accumulatedChapters.push(ch);

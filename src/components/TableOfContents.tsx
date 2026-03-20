@@ -96,9 +96,9 @@ export default function TableOfContents({
                 </button>
 
                 {/* Level 2: Sections — show when chapter is active */}
-                {ch.sections.length > 0 && chActive && (
+                {(ch.sections?.length ?? 0) > 0 && chActive && (
                   <div className="ml-3 border-l border-[#e5e2db] pl-2 my-0.5">
-                    {ch.sections.map((sec, j) => {
+                    {(ch.sections ?? []).map((sec, j) => {
                       const secActive = isInRange(
                         currentPage,
                         sec.startPage,

@@ -25,7 +25,7 @@ function findSection(
   chapter: BookChapter,
   page: number
 ): BookSection | undefined {
-  return chapter.sections.find((s) => inRange(page, s.startPage, s.endPage));
+  return (chapter.sections ?? []).find((s) => inRange(page, s.startPage, s.endPage));
 }
 
 function findSubsection(
@@ -44,7 +44,7 @@ function buildStructureOverview(structure: BookStructure): string {
   lines.push("Table of Contents:");
   for (const ch of structure.chapters) {
     lines.push(`- ${ch.title} (p.${ch.startPage}-${ch.endPage})`);
-    for (const sec of ch.sections) {
+    for (const sec of ch.sections ?? []) {
       lines.push(`  - ${sec.title} (p.${sec.startPage}-${sec.endPage})`);
       if (sec.subsections) {
         for (const sub of sec.subsections) {
