@@ -1,7 +1,8 @@
 const DB_NAME = "readlens";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const BOOKS_STORE = "books";
 const ANNOTATIONS_STORE = "annotations";
+const STRUCTURES_STORE = "structures";
 
 export interface StoredAnnotation {
   type: string;
@@ -19,6 +20,28 @@ export interface PageAnnotations {
   generatedAt: number;
 }
 
+export interface BookSection {
+  title: string;
+  startPage: number;
+  endPage: number;
+  summary: string;
+}
+
+export interface BookChapter {
+  title: string;
+  startPage: number;
+  endPage: number;
+  summary: string;
+  sections: BookSection[];
+}
+
+export interface BookStructure {
+  bookId: string;
+  analyzedAt: number;
+  overview: string;
+  chapters: BookChapter[];
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -27,6 +50,7 @@ export interface Book {
   totalPages: number;
   lastPage: number;
   addedAt: number;
+  structureStatus?: "pending" | "analyzing" | "ready" | "failed" | "skipped";
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -40,6 +64,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(ANNOTATIONS_STORE)) {
         const store = db.createObjectStore(ANNOTATIONS_STORE, { keyPath: "id" });
         store.createIndex("bookId", "bookId", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STRUCTURES_STORE)) {
+        db.createObjectStore(STRUCTURES_STORE, { keyPath: "bookId" });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -171,4 +198,53 @@ export async function deleteAllBookAnnotations(
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// --- Book Structure ---
+
+export async function saveBookStructure(
+  structure: BookStructure
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STRUCTURES_STORE, "readwrite");
+    tx.objectStore(STRUCTURES_STORE).put(structure);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getBookStructure(
+  bookId: string
+): Promise<BookStructure | undefined> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STRUCTURES_STORE, "readonly");
+    const req = tx.objectStore(STRUCTURES_STORE).get(bookId);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deleteBookStructure(
+  bookId: string
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STRUCTURES_STORE, "readwrite");
+    tx.objectStore(STRUCTURES_STORE).delete(bookId);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function updateBookStructureStatus(
+  id: string,
+  status: Book["structureStatus"]
+): Promise<void> {
+  const book = await getBook(id);
+  if (book) {
+    book.structureStatus = status;
+    await saveBook(book);
+  }
 }

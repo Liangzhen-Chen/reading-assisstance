@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { bookTitle, pageText, pageImage, pageNumber, model, density, style } =
+  const { bookTitle, pageText, pageImage, pageNumber, model, density, style, structureOverview, chapterSummary, contextText } =
     await request.json();
 
   if (!pageNumber || (!pageText && !pageImage)) {
@@ -119,9 +119,21 @@ export async function POST(request: NextRequest) {
 
   const settingsBlock = `\n\n## 本次设定\n批注密度：${densityInstruction}\n语气风格：${styleInstruction}`;
 
+  // Build context block if structure is available
+  let contextBlock = "";
+  if (structureOverview) {
+    contextBlock += `\n\n== 全书结构 ==\n${structureOverview}`;
+  }
+  if (chapterSummary) {
+    contextBlock += `\n\n== 当前章节 ==\n${chapterSummary}`;
+  }
+  if (contextText) {
+    contextBlock += `\n\n== 上下文 ==\n${contextText}`;
+  }
+
   if (pageImage) {
     contentParts.push({
-      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的扫描图片。请先识别图中的文字内容，然后生成阅读批注。${settingsBlock}`,
+      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的扫描图片。请先识别图中的文字内容，然后生成阅读批注。${contextBlock}${settingsBlock}`,
     });
     contentParts.push({
       inline_data: {
@@ -131,7 +143,7 @@ export async function POST(request: NextRequest) {
     });
   } else {
     contentParts.push({
-      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。\n\n请生成阅读批注。${settingsBlock}\n\n--- 以下为原文 ---\n${pageText}`,
+      text: `用户正在阅读《${bookTitle || "未知书籍"}》，以下是第 ${pageNumber} 页的内容。\n\n请生成阅读批注。${contextBlock}${settingsBlock}\n\n--- 以下为第 ${pageNumber} 页原文（请只为这一页生成批注）---\n${pageText}`,
     });
   }
 

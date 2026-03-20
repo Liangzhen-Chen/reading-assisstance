@@ -10,9 +10,13 @@ import {
   savePageAnnotations,
   deletePageAnnotations,
   deleteAllBookAnnotations,
+  getBookStructure,
   type StoredAnnotation,
+  type BookStructure,
 } from "@/lib/storage";
+import { resolveAnnotationContext } from "@/lib/structureContext";
 import AnnotationPanel from "@/components/AnnotationPanel";
+import TableOfContents from "@/components/TableOfContents";
 
 export default function ReaderPage() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -36,6 +40,11 @@ export default function ReaderPage() {
   const [regenerateKey, setRegenerateKey] = useState(0);
   const [annoError, setAnnoError] = useState("");
 
+  // Structure & TOC state
+  const [structure, setStructure] = useState<BookStructure | null>(null);
+  const [tocVisible, setTocVisible] = useState(false);
+  const pageTextCache = useRef<Map<number, string>>(new Map());
+
   // Load PDF from IndexedDB
   useEffect(() => {
     (async () => {
@@ -52,6 +61,13 @@ export default function ReaderPage() {
       setPdf(doc);
       setTotalPages(doc.numPages);
       setLoading(false);
+
+      // Load structure if available
+      const struct = await getBookStructure(bookId);
+      if (struct) {
+        setStructure(struct);
+        setTocVisible(true);
+      }
     })();
   }, [bookId, router]);
 
@@ -94,6 +110,22 @@ export default function ReaderPage() {
     }
   }, [bookId, currentPage]);
 
+  // Extract text for a range of pages, using cache
+  const extractContextPages = useCallback(
+    async (start: number, end: number): Promise<Map<number, string>> => {
+      if (!pdf) return pageTextCache.current;
+      const { extractPageText } = await import("@/lib/pdfParser");
+      for (let p = start; p <= end; p++) {
+        if (!pageTextCache.current.has(p)) {
+          const text = await extractPageText(pdf, p);
+          pageTextCache.current.set(p, text);
+        }
+      }
+      return pageTextCache.current;
+    },
+    [pdf]
+  );
+
   // Load or generate annotations for current page
   const fetchAnnotations = useCallback(
     async (forceRegenerate = false) => {
@@ -119,6 +151,44 @@ export default function ReaderPage() {
         const text = await extractPageText(pdf, currentPage);
         const hasText = text.trim().length > 30;
 
+        // Resolve structure context if available
+        let contextFields: Record<string, string> = {};
+        if (structure) {
+          const ctx = resolveAnnotationContext(
+            structure,
+            currentPage,
+            pageTextCache.current
+          );
+
+          // If we need pages we haven't cached yet, extract them
+          if (
+            ctx.contextRange.start > 0 &&
+            ctx.contextRange.end > 0
+          ) {
+            const cached = await extractContextPages(
+              ctx.contextRange.start,
+              ctx.contextRange.end
+            );
+            // Re-resolve with updated cache
+            const updatedCtx = resolveAnnotationContext(
+              structure,
+              currentPage,
+              cached
+            );
+            contextFields = {
+              structureOverview: updatedCtx.structureOverview,
+              chapterSummary: updatedCtx.chapterSummary,
+              contextText: updatedCtx.contextText,
+            };
+          } else {
+            contextFields = {
+              structureOverview: ctx.structureOverview,
+              chapterSummary: ctx.chapterSummary,
+              contextText: ctx.contextText,
+            };
+          }
+        }
+
         // Build request body — use text if available, otherwise capture page as image
         let body: Record<string, unknown>;
         if (hasText) {
@@ -129,6 +199,7 @@ export default function ReaderPage() {
             model: selectedModel,
             density,
             style,
+            ...contextFields,
           };
         } else {
           // Scanned PDF: render page to image and send to Gemini vision
@@ -147,6 +218,7 @@ export default function ReaderPage() {
             model: selectedModel,
             density,
             style,
+            ...contextFields,
           };
         }
 
@@ -178,7 +250,7 @@ export default function ReaderPage() {
         setAnnoLoading(false);
       }
     },
-    [pdf, bookId, currentPage, title, selectedModel, density, style]
+    [pdf, bookId, currentPage, title, selectedModel, density, style, structure, extractContextPages]
   );
 
   useEffect(() => {
@@ -231,6 +303,9 @@ export default function ReaderPage() {
     );
   }
 
+  const leftMargin = tocVisible ? "ml-[280px]" : "";
+  const rightMargin = sidebarVisible ? "mr-[340px]" : "";
+
   return (
     <div className="min-h-screen bg-[#faf9f6] flex flex-col">
       {/* Top Bar */}
@@ -278,6 +353,18 @@ export default function ReaderPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* TOC toggle */}
+          <button
+            onClick={() => setTocVisible((v) => !v)}
+            className={`px-3 py-1 text-xs border rounded-md transition-colors ${
+              tocVisible
+                ? "border-[#5b7f6a] bg-[#eef4f0] text-[#5b7f6a]"
+                : "border-[#e5e2db] text-[#999] hover:bg-[#f5f4f0]"
+            }`}
+            title={structure ? "切换目录" : "暂无目录结构"}
+          >
+            目录
+          </button>
           <button
             onClick={() => setScale((s) => Math.max(0.5, s - 0.25))}
             className="px-2 py-1 text-xs border border-[#e5e2db] rounded-md hover:bg-[#f5f4f0] text-[#666]"
@@ -306,11 +393,18 @@ export default function ReaderPage() {
         </div>
       </header>
 
+      {/* Table of Contents Sidebar */}
+      <TableOfContents
+        structure={structure}
+        currentPage={currentPage}
+        visible={tocVisible}
+        onToggle={() => setTocVisible(false)}
+        onNavigate={goToPage}
+      />
+
       {/* Reader area */}
       <main
-        className={`flex-1 mt-14 mb-16 flex justify-center overflow-auto py-8 transition-all ${
-          sidebarVisible ? "mr-[340px]" : ""
-        }`}
+        className={`flex-1 mt-14 mb-16 flex justify-center overflow-auto py-8 transition-all ${leftMargin} ${rightMargin}`}
       >
         <canvas ref={canvasRef} className="shadow-lg" />
       </main>
@@ -336,9 +430,13 @@ export default function ReaderPage() {
       {/* Bottom Page Nav */}
       <nav
         className={`fixed bottom-6 flex items-center gap-1.5 bg-white border border-[#e5e2db] rounded-xl px-4 py-2 shadow-lg transition-all ${
-          sidebarVisible
-            ? "left-[calc(50%-170px)] -translate-x-1/2"
-            : "left-1/2 -translate-x-1/2"
+          tocVisible && sidebarVisible
+            ? "left-[calc(50%+(-340px+280px)/2)] -translate-x-1/2"
+            : tocVisible
+              ? "left-[calc(50%+140px)] -translate-x-1/2"
+              : sidebarVisible
+                ? "left-[calc(50%-170px)] -translate-x-1/2"
+                : "left-1/2 -translate-x-1/2"
         }`}
       >
         <button
