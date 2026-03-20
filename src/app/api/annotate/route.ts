@@ -161,7 +161,9 @@ export async function POST(request: NextRequest) {
             ? "API 密钥无效或已过期（403）"
             : res.status === 404
               ? "模型不可用，请切换其他模型（404）"
-              : `Gemini API 错误（${res.status}）`;
+              : res.status === 503
+                ? "Gemini 服务暂时不可用，请稍后重试（503）"
+                : `Gemini API 错误（${res.status}）`;
       return NextResponse.json(
         { error: friendly, detail: err },
         { status: res.status }

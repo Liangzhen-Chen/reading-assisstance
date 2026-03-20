@@ -31,6 +31,44 @@ export const STYLE_OPTIONS = [
   { id: "academic", label: "学术", desc: "专业术语+方法论" },
 ];
 
+function getErrorInfo(error: string): { icon: string; title: string; hint: string } {
+  if (error.includes("429"))
+    return { icon: "⏳", title: "请求太频繁，API 限流了", hint: "免费额度有限，稍等一分钟再试" };
+  if (error.includes("503"))
+    return { icon: "⏳", title: "Gemini 服务暂时不可用", hint: "服务器过载或维护中，等一会儿再试" };
+  if (error.includes("500"))
+    return { icon: "⚠️", title: "服务器内部错误", hint: "可能是 API 密钥未配置，请检查环境变量" };
+  if (error.includes("403"))
+    return { icon: "🔒", title: "API 密钥无效或已过期", hint: "请检查 GEMINI_API_KEY 是否正确" };
+  if (error.includes("404"))
+    return { icon: "❓", title: "模型不可用", hint: "请切换其他模型再试" };
+  if (error.includes("400"))
+    return { icon: "⚠️", title: "请求参数有误", hint: "页面内容可能无法被处理，试试其他页" };
+  if (error.includes("无可提取"))
+    return { icon: "📄", title: "本页是扫描图片或无文字内容", hint: "正在尝试用图片识别，可能需要更长时间" };
+  if (error.includes("Failed to fetch") || error.includes("network") || error.includes("NetworkError"))
+    return { icon: "🌐", title: "网络连接失败", hint: "请检查网络连接后重试" };
+  return { icon: "⚠️", title: "批注生成失败", hint: "请稍后重试，或切换模型" };
+}
+
+function ErrorDisplay({ error, onRetry, loading }: { error: string; onRetry: () => void; loading: boolean }) {
+  const { icon, title, hint } = getErrorInfo(error);
+  return (
+    <div className="text-center py-10 px-2">
+      <div className="text-2xl mb-3">{icon}</div>
+      <p className="text-sm text-[#666] mb-1.5">{title}</p>
+      <p className="text-xs text-[#999] mb-4">{hint}</p>
+      <button
+        onClick={onRetry}
+        disabled={loading}
+        className="text-xs px-4 py-2 bg-[#5b7f6a] text-white rounded-lg hover:bg-[#4d6e5b] transition-colors disabled:opacity-40"
+      >
+        重试
+      </button>
+    </div>
+  );
+}
+
 interface Props {
   annotations: StoredAnnotation[];
   loading: boolean;
@@ -175,32 +213,7 @@ export default function AnnotationPanel({
             <p className="text-sm text-[#999]">AI 正在生成批注...</p>
           </div>
         ) : error ? (
-          <div className="text-center py-10 px-2">
-            <div className="text-2xl mb-3">
-              {error.includes("429") ? "⏳" : "⚠️"}
-            </div>
-            <p className="text-sm text-[#666] mb-1.5">
-              {error.includes("429")
-                ? "请求太频繁，API 限流了"
-                : error.includes("无可提取")
-                  ? "本页是扫描图片或无文字内容"
-                  : "批注生成失败"}
-            </p>
-            <p className="text-xs text-[#999] mb-4">
-              {error.includes("429")
-                ? "免费额度有限，稍等一分钟再试"
-                : error.includes("无可提取")
-                  ? "正在尝试用图片识别，可能需要更长时间"
-                  : error}
-            </p>
-            <button
-              onClick={onRegenerate}
-              disabled={loading}
-              className="text-xs px-4 py-2 bg-[#5b7f6a] text-white rounded-lg hover:bg-[#4d6e5b] transition-colors disabled:opacity-40"
-            >
-              重试
-            </button>
-          </div>
+          <ErrorDisplay error={error} onRetry={onRegenerate} loading={loading} />
         ) : annotations.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-sm text-[#999]">本页暂无批注</p>
