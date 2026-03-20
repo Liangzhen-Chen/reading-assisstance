@@ -95,6 +95,7 @@ function openDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const db = request.result;
       const oldVersion = event.oldVersion;
+      console.log("[Storage] DB upgrade: v" + oldVersion + " → v" + DB_VERSION, "stores:", Array.from(db.objectStoreNames));
 
       if (!db.objectStoreNames.contains(BOOKS_STORE)) {
         db.createObjectStore(BOOKS_STORE, { keyPath: "id" });
@@ -119,18 +120,22 @@ function openDB(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       dbInstance = request.result;
-      dbInstance.onclose = () => resetDB();
+      console.log("[Storage] DB opened: v" + dbInstance.version, "stores:", Array.from(dbInstance.objectStoreNames));
+      dbInstance.onclose = () => { console.log("[Storage] DB connection closed"); resetDB(); };
       dbInstance.onversionchange = () => {
+        console.log("[Storage] DB version change detected, closing connection");
         dbInstance?.close();
         resetDB();
       };
       resolve(dbInstance);
     };
     request.onerror = () => {
+      console.error("[Storage] DB open error:", request.error);
       resetDB();
       reject(request.error);
     };
     request.onblocked = () => {
+      console.error("[Storage] DB upgrade blocked by another connection");
       resetDB();
       reject(new Error("IndexedDB upgrade blocked by another connection"));
     };
@@ -144,14 +149,15 @@ function openDB(): Promise<IDBDatabase> {
  * This keeps the books store lightweight for frequent reads/writes.
  */
 export async function saveBook(book: Book): Promise<void> {
+  console.log("[Storage] saveBook:", book.id, "data size:", book.data.byteLength);
   const db = await openDB();
   const { data, ...meta } = book;
   return new Promise((resolve, reject) => {
     const tx = db.transaction([BOOKS_STORE, BOOK_DATA_STORE], "readwrite");
     tx.objectStore(BOOKS_STORE).put(meta);
     tx.objectStore(BOOK_DATA_STORE).put({ id: book.id, data });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => { console.log("[Storage] saveBook complete"); resolve(); };
+    tx.onerror = () => { console.error("[Storage] saveBook error:", tx.error); reject(tx.error); };
   });
 }
 
@@ -168,6 +174,7 @@ export async function getBookMeta(id: string): Promise<BookMeta | undefined> {
 
 /** Get the PDF ArrayBuffer for a book (heavy, only call when opening reader) */
 export async function getBookData(id: string): Promise<ArrayBuffer | undefined> {
+  console.log("[Storage] getBookData:", id);
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(BOOK_DATA_STORE, "readonly");
@@ -175,16 +182,22 @@ export async function getBookData(id: string): Promise<ArrayBuffer | undefined> 
     req.onsuccess = () => {
       const result = req.result;
       if (result) {
+        console.log("[Storage] getBookData: found in bookData store,", result.data?.byteLength, "bytes");
         resolve(result.data);
       } else {
+        console.log("[Storage] getBookData: not in bookData store, trying fallback to books store...");
         // Fallback: old schema might have data in books store
         const tx2 = db.transaction(BOOKS_STORE, "readonly");
         const req2 = tx2.objectStore(BOOKS_STORE).get(id);
-        req2.onsuccess = () => resolve(req2.result?.data);
-        req2.onerror = () => resolve(undefined);
+        req2.onsuccess = () => {
+          const fallback = req2.result?.data;
+          console.log("[Storage] getBookData fallback:", fallback ? `${fallback.byteLength} bytes` : "NOT FOUND");
+          resolve(fallback);
+        };
+        req2.onerror = () => { console.error("[Storage] getBookData fallback error"); resolve(undefined); };
       }
     };
-    req.onerror = () => reject(req.error);
+    req.onerror = () => { console.error("[Storage] getBookData error:", req.error); reject(req.error); };
   });
 }
 

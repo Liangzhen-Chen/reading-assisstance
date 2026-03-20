@@ -47,12 +47,18 @@ export default function UploadPage() {
       setError("");
 
       try {
+        console.log("[ReadLens Upload] Reading file:", file.name, `(${(file.size / 1024 / 1024).toFixed(1)} MB)`);
         const buffer = await file.arrayBuffer();
+        console.log("[ReadLens Upload] ArrayBuffer ready:", buffer.byteLength, "bytes");
+
         const { loadPdf } = await import("@/lib/pdf");
         const pdf = await loadPdf(buffer.slice(0));
+        console.log("[ReadLens Upload] PDF parsed:", pdf.numPages, "pages");
+
         const id = crypto.randomUUID();
         const bookTitle = file.name.replace(/\.pdf$/i, "");
 
+        console.log("[ReadLens Upload] Saving to IndexedDB (id:", id, ")...");
         await saveBook({
           id,
           title: bookTitle,
@@ -63,6 +69,7 @@ export default function UploadPage() {
           addedAt: Date.now(),
           structureStatus: "pending",
         });
+        console.log("[ReadLens Upload] ✅ Book saved to IndexedDB");
 
         // Phase 1: Detect if scanned
         setProgress({

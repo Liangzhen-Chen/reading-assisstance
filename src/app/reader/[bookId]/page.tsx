@@ -51,7 +51,11 @@ export default function ReaderPage() {
   useEffect(() => {
     (async () => {
       try {
+        console.log("[ReadLens] Loading book:", bookId);
+
+        console.log("[ReadLens] Step 1: getBookMeta...");
         const meta = await getBookMeta(bookId);
+        console.log("[ReadLens] Step 1 done:", meta ? `found "${meta.title}", ${meta.totalPages} pages` : "NOT FOUND");
         if (!meta) {
           router.push("/");
           return;
@@ -59,31 +63,39 @@ export default function ReaderPage() {
         setTitle(meta.title);
         setCurrentPage(meta.lastPage);
 
+        console.log("[ReadLens] Step 2: getBookData...");
         const bookData = await getBookData(bookId);
+        console.log("[ReadLens] Step 2 done:", bookData ? `${(bookData.byteLength / 1024 / 1024).toFixed(1)} MB` : "NOT FOUND");
         if (!bookData) {
           setLoadError("PDF 数据丢失，请重新上传");
           setLoading(false);
           return;
         }
 
+        console.log("[ReadLens] Step 3: loadPdf...");
         const { loadPdf } = await import("@/lib/pdf");
         const doc = await loadPdf(bookData.slice(0));
+        console.log("[ReadLens] Step 3 done: PDF loaded,", doc.numPages, "pages");
         setPdf(doc);
         setTotalPages(doc.numPages);
         setLoading(false);
 
         // Load structure if available
         try {
+          console.log("[ReadLens] Step 4: getBookStructure...");
           const struct = await getBookStructure(bookId);
+          console.log("[ReadLens] Step 4 done:", struct ? `${struct.chapters.length} chapters` : "no structure");
           if (struct) {
             setStructure(struct);
             setTocVisible(true);
           }
-        } catch {
-          // Structure not available, continue without it
+        } catch (structErr) {
+          console.warn("[ReadLens] Structure load failed:", structErr);
         }
+
+        console.log("[ReadLens] ✅ Book loaded successfully");
       } catch (err) {
-        console.error("Failed to load book:", err);
+        console.error("[ReadLens] ❌ Failed to load book:", err);
         setLoadError(`加载失败: ${String(err)}`);
         setLoading(false);
       }
