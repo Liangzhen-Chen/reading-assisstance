@@ -9,6 +9,7 @@ import {
   getPageAnnotations,
   savePageAnnotations,
   deletePageAnnotations,
+  deleteAllBookAnnotations,
   type StoredAnnotation,
 } from "@/lib/storage";
 import AnnotationPanel from "@/components/AnnotationPanel";
@@ -189,6 +190,13 @@ export default function ReaderPage() {
     fetchAnnotations(true);
   };
 
+  const handleRegenerateAll = async () => {
+    if (!bookId) return;
+    await deleteAllBookAnnotations(bookId);
+    setRegenerateKey((k) => k + 1);
+    fetchAnnotations(true);
+  };
+
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -314,6 +322,7 @@ export default function ReaderPage() {
         visible={sidebarVisible}
         onToggle={() => setSidebarVisible(false)}
         onRegenerate={handleRegenerate}
+        onRegenerateAll={handleRegenerateAll}
         currentPage={currentPage}
         model={selectedModel}
         onModelChange={setSelectedModel}

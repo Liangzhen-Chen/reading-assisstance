@@ -151,3 +151,24 @@ export async function deletePageAnnotations(
     tx.onerror = () => reject(tx.error);
   });
 }
+
+export async function deleteAllBookAnnotations(
+  bookId: string
+): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ANNOTATIONS_STORE, "readwrite");
+    const store = tx.objectStore(ANNOTATIONS_STORE);
+    const index = store.index("bookId");
+    const req = index.openCursor(IDBKeyRange.only(bookId));
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (cursor) {
+        cursor.delete();
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

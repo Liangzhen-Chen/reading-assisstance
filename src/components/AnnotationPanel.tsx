@@ -37,6 +37,7 @@ interface Props {
   visible: boolean;
   onToggle: () => void;
   onRegenerate: () => void;
+  onRegenerateAll: () => void;
   currentPage: number;
   model: string;
   onModelChange: (model: string) => void;
@@ -53,6 +54,7 @@ export default function AnnotationPanel({
   visible,
   onToggle,
   onRegenerate,
+  onRegenerateAll,
   currentPage,
   model,
   onModelChange,
@@ -104,10 +106,18 @@ export default function AnnotationPanel({
           <button
             onClick={onRegenerate}
             disabled={loading}
-            className="text-xs px-2.5 py-1.5 border border-[#e5e2db] rounded-md hover:bg-[#f5f4f0] text-[#666] disabled:opacity-40 transition-colors whitespace-nowrap"
-            title="清除缓存并重新生成本页批注"
+            className="text-xs px-2 py-1.5 border border-[#e5e2db] rounded-md hover:bg-[#f5f4f0] text-[#666] disabled:opacity-40 transition-colors whitespace-nowrap"
+            title="重新生成本页批注"
           >
             {loading ? "生成中..." : "重新生成"}
+          </button>
+          <button
+            onClick={onRegenerateAll}
+            disabled={loading}
+            className="text-xs px-2 py-1.5 border border-[#e5e2db] rounded-md hover:bg-[#fff0f0] text-[#c66] disabled:opacity-40 transition-colors whitespace-nowrap"
+            title="清除全书批注缓存，当前页将重新生成"
+          >
+            清除全部
           </button>
         </div>
 
