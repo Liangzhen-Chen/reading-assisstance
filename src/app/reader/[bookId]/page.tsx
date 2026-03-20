@@ -393,6 +393,32 @@ export default function ReaderPage() {
         </div>
       </header>
 
+      {/* Edge tab to reopen TOC */}
+      {!tocVisible && structure && (
+        <button
+          onClick={() => setTocVisible(true)}
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-40 bg-white border border-l-0 border-[#e5e2db] rounded-r-lg px-1.5 py-4 shadow-md hover:bg-[#f5f4f0] transition-colors group"
+          title="展开目录"
+        >
+          <span className="text-xs text-[#999] group-hover:text-[#5b7f6a] [writing-mode:vertical-rl]">
+            目录 ›
+          </span>
+        </button>
+      )}
+
+      {/* Edge tab to reopen annotations */}
+      {!sidebarVisible && (
+        <button
+          onClick={() => setSidebarVisible(true)}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-white border border-r-0 border-[#e5e2db] rounded-l-lg px-1.5 py-4 shadow-md hover:bg-[#f5f4f0] transition-colors group"
+          title="展开批注"
+        >
+          <span className="text-xs text-[#999] group-hover:text-[#5b7f6a] [writing-mode:vertical-rl]">
+            ‹ 批注
+          </span>
+        </button>
+      )}
+
       {/* Table of Contents Sidebar */}
       <TableOfContents
         structure={structure}

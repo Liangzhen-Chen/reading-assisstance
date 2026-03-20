@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAllBooks, deleteBook, type Book } from "@/lib/storage";
+import { getAllBooks, deleteBook, deleteBookStructure, deleteAllBookAnnotations, type Book } from "@/lib/storage";
 
 export default function HomePage() {
   const router = useRouter();
@@ -19,7 +19,11 @@ export default function HomePage() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm("确定删除这本书？")) {
-      await deleteBook(id);
+      await Promise.all([
+        deleteBook(id),
+        deleteBookStructure(id),
+        deleteAllBookAnnotations(id),
+      ]);
       setBooks((prev) => prev.filter((b) => b.id !== id));
     }
   };
