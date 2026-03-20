@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
-  getBook,
+  getBookMeta,
+  getBookData,
   updateBookProgress,
   getPageAnnotations,
   savePageAnnotations,
@@ -50,16 +51,23 @@ export default function ReaderPage() {
   useEffect(() => {
     (async () => {
       try {
-        const book = await getBook(bookId);
-        if (!book) {
+        const meta = await getBookMeta(bookId);
+        if (!meta) {
           router.push("/");
           return;
         }
-        setTitle(book.title);
-        setCurrentPage(book.lastPage);
+        setTitle(meta.title);
+        setCurrentPage(meta.lastPage);
+
+        const bookData = await getBookData(bookId);
+        if (!bookData) {
+          setLoadError("PDF 数据丢失，请重新上传");
+          setLoading(false);
+          return;
+        }
 
         const { loadPdf } = await import("@/lib/pdf");
-        const doc = await loadPdf(book.data.slice(0));
+        const doc = await loadPdf(bookData.slice(0));
         setPdf(doc);
         setTotalPages(doc.numPages);
         setLoading(false);

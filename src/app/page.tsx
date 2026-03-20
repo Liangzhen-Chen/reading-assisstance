@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAllBooks, deleteBook, deleteBookStructure, deleteAllBookAnnotations, type Book } from "@/lib/storage";
+import { getAllBooks, deleteBook, deleteBookStructure, deleteAllBookAnnotations, type BookMeta } from "@/lib/storage";
 
 export default function HomePage() {
   const router = useRouter();
-  const [books, setBooks] = useState<Book[]>([]);
+  const [books, setBooks] = useState<BookMeta[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
