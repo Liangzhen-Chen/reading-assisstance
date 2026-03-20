@@ -62,8 +62,15 @@ export interface Book {
   structureStatus?: "pending" | "analyzing" | "ready" | "failed" | "skipped";
 }
 
+// Singleton DB connection to avoid multiple open connections blocking upgrades
+let dbInstance: IDBDatabase | null = null;
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbInstance) return Promise.resolve(dbInstance);
+  if (dbPromise) return dbPromise;
+
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -78,9 +85,27 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STRUCTURES_STORE, { keyPath: "bookId" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      dbInstance = request.result;
+      // If the connection is closed externally (e.g. version change), reset singleton
+      dbInstance.onclose = () => {
+        dbInstance = null;
+        dbPromise = null;
+      };
+      dbInstance.onversionchange = () => {
+        dbInstance?.close();
+        dbInstance = null;
+        dbPromise = null;
+      };
+      resolve(dbInstance);
+    };
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error);
+    };
   });
+
+  return dbPromise;
 }
 
 export async function saveBook(book: Book): Promise<void> {

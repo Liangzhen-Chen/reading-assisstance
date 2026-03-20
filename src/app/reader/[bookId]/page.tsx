@@ -48,25 +48,34 @@ export default function ReaderPage() {
   // Load PDF from IndexedDB
   useEffect(() => {
     (async () => {
-      const book = await getBook(bookId);
-      if (!book) {
+      try {
+        const book = await getBook(bookId);
+        if (!book) {
+          router.push("/");
+          return;
+        }
+        setTitle(book.title);
+        setCurrentPage(book.lastPage);
+
+        const { loadPdf } = await import("@/lib/pdf");
+        const doc = await loadPdf(book.data.slice(0));
+        setPdf(doc);
+        setTotalPages(doc.numPages);
+        setLoading(false);
+
+        // Load structure if available
+        try {
+          const struct = await getBookStructure(bookId);
+          if (struct) {
+            setStructure(struct);
+            setTocVisible(true);
+          }
+        } catch {
+          // Structure not available, continue without it
+        }
+      } catch (err) {
+        console.error("Failed to load book:", err);
         router.push("/");
-        return;
-      }
-      setTitle(book.title);
-      setCurrentPage(book.lastPage);
-
-      const { loadPdf } = await import("@/lib/pdf");
-      const doc = await loadPdf(book.data.slice(0));
-      setPdf(doc);
-      setTotalPages(doc.numPages);
-      setLoading(false);
-
-      // Load structure if available
-      const struct = await getBookStructure(bookId);
-      if (struct) {
-        setStructure(struct);
-        setTocVisible(true);
       }
     })();
   }, [bookId, router]);

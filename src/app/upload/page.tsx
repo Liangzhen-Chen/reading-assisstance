@@ -213,7 +213,7 @@ export default function UploadPage() {
         setLoading(false);
       }
     },
-    [router]
+    [router, language]
   );
 
   const onDrop = useCallback(
