@@ -20,11 +20,19 @@ export interface PageAnnotations {
   generatedAt: number;
 }
 
+export interface BookSubsection {
+  title: string;
+  startPage: number;
+  endPage: number;
+  summary: string;
+}
+
 export interface BookSection {
   title: string;
   startPage: number;
   endPage: number;
   summary: string;
+  subsections?: BookSubsection[];
 }
 
 export interface BookChapter {
@@ -39,6 +47,7 @@ export interface BookStructure {
   bookId: string;
   analyzedAt: number;
   overview: string;
+  language: string; // "zh" | "en"
   chapters: BookChapter[];
 }
 

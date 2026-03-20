@@ -1,44 +1,56 @@
-import type { BookStructure, BookChapter, BookSection } from "./storage";
+import type { BookStructure, BookChapter, BookSection, BookSubsection } from "./storage";
 
 export interface AnnotationContext {
   structureOverview: string;
   chapterSummary: string;
   contextText: string;
   contextRange: { start: number; end: number };
-  strategy: "full-chapter" | "full-section" | "window";
+  strategy: "full-chapter" | "full-section" | "full-subsection" | "window";
 }
 
 const MAX_CONTEXT_PAGES = 30;
+
+function inRange(page: number, start: number, end: number): boolean {
+  return page >= start && page <= end;
+}
 
 function findChapter(
   structure: BookStructure,
   page: number
 ): BookChapter | undefined {
-  return structure.chapters.find(
-    (ch) => page >= ch.startPage && page <= ch.endPage
-  );
+  return structure.chapters.find((ch) => inRange(page, ch.startPage, ch.endPage));
 }
 
 function findSection(
   chapter: BookChapter,
   page: number
 ): BookSection | undefined {
-  return chapter.sections.find(
-    (s) => page >= s.startPage && page <= s.endPage
-  );
+  return chapter.sections.find((s) => inRange(page, s.startPage, s.endPage));
+}
+
+function findSubsection(
+  section: BookSection,
+  page: number
+): BookSubsection | undefined {
+  return section.subsections?.find((sub) => inRange(page, sub.startPage, sub.endPage));
 }
 
 function buildStructureOverview(structure: BookStructure): string {
   const lines: string[] = [];
   if (structure.overview) {
-    lines.push(`全书概述：${structure.overview}`);
+    lines.push(`Overview: ${structure.overview}`);
     lines.push("");
   }
-  lines.push("章节目录：");
+  lines.push("Table of Contents:");
   for (const ch of structure.chapters) {
-    lines.push(`- ${ch.title}（第${ch.startPage}-${ch.endPage}页）`);
+    lines.push(`- ${ch.title} (p.${ch.startPage}-${ch.endPage})`);
     for (const sec of ch.sections) {
-      lines.push(`  - ${sec.title}（第${sec.startPage}-${sec.endPage}页）`);
+      lines.push(`  - ${sec.title} (p.${sec.startPage}-${sec.endPage})`);
+      if (sec.subsections) {
+        for (const sub of sec.subsections) {
+          lines.push(`    - ${sub.title} (p.${sub.startPage}-${sub.endPage})`);
+        }
+      }
     }
   }
   return lines.join("\n");
@@ -83,13 +95,17 @@ export function resolveAnnotationContext(
   }
 
   const chapterPages = chapter.endPage - chapter.startPage + 1;
-  const chapterSummaryParts = [`当前章节：${chapter.title}（第${chapter.startPage}-${chapter.endPage}页）\n${chapter.summary}`];
+  const summaryParts = [`Chapter: ${chapter.title} (p.${chapter.startPage}-${chapter.endPage})\n${chapter.summary}`];
 
   const section = findSection(chapter, currentPage);
   if (section) {
-    chapterSummaryParts.push(`当前小节：${section.title}（第${section.startPage}-${section.endPage}页）\n${section.summary}`);
+    summaryParts.push(`Section: ${section.title} (p.${section.startPage}-${section.endPage})\n${section.summary}`);
+    const subsection = findSubsection(section, currentPage);
+    if (subsection) {
+      summaryParts.push(`Subsection: ${subsection.title} (p.${subsection.startPage}-${subsection.endPage})\n${subsection.summary}`);
+    }
   }
-  const chapterSummary = chapterSummaryParts.join("\n\n");
+  const chapterSummary = summaryParts.join("\n\n");
 
   let range: { start: number; end: number };
   let strategy: AnnotationContext["strategy"];
@@ -100,32 +116,35 @@ export function resolveAnnotationContext(
     strategy = "full-chapter";
   } else if (section) {
     const sectionPages = section.endPage - section.startPage + 1;
+
     if (sectionPages <= MAX_CONTEXT_PAGES) {
       // Full section fits
       range = { start: section.startPage, end: section.endPage };
       strategy = "full-section";
     } else {
-      // Section too large, use window within section
-      range = clampRange(
-        currentPage,
-        MAX_CONTEXT_PAGES,
-        section.startPage,
-        section.endPage
-      );
-      strategy = "window";
+      // Section too large — try subsection
+      const subsection = findSubsection(section, currentPage);
+      if (subsection) {
+        const subPages = subsection.endPage - subsection.startPage + 1;
+        if (subPages <= MAX_CONTEXT_PAGES) {
+          range = { start: subsection.startPage, end: subsection.endPage };
+          strategy = "full-subsection";
+        } else {
+          range = clampRange(currentPage, MAX_CONTEXT_PAGES, subsection.startPage, subsection.endPage);
+          strategy = "window";
+        }
+      } else {
+        range = clampRange(currentPage, MAX_CONTEXT_PAGES, section.startPage, section.endPage);
+        strategy = "window";
+      }
     }
   } else {
-    // No sections, use window within chapter (quarter of chapter, min 15, max 30)
+    // No sections, use window within chapter
     const windowSize = Math.min(
       MAX_CONTEXT_PAGES,
       Math.max(15, Math.ceil(chapterPages / 4))
     );
-    range = clampRange(
-      currentPage,
-      windowSize,
-      chapter.startPage,
-      chapter.endPage
-    );
+    range = clampRange(currentPage, windowSize, chapter.startPage, chapter.endPage);
     strategy = "window";
   }
 
@@ -134,7 +153,7 @@ export function resolveAnnotationContext(
   for (let p = range.start; p <= range.end; p++) {
     const text = pageTexts.get(p);
     if (text && text.trim()) {
-      contextLines.push(`--- 第 ${p} 页 ---\n${text}`);
+      contextLines.push(`--- Page ${p} ---\n${text}`);
     }
   }
 

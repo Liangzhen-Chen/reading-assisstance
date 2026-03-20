@@ -19,11 +19,17 @@ interface AnalysisProgress {
   message: string;
 }
 
+const LANGUAGE_OPTIONS = [
+  { id: "zh", label: "中文", desc: "摘要和概括使用中文" },
+  { id: "en", label: "English", desc: "Summaries in English" },
+];
+
 export default function UploadPage() {
   const router = useRouter();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [language, setLanguage] = useState("zh");
   const [progress, setProgress] = useState<AnalysisProgress>({
     phase: "idle",
     current: 0,
@@ -134,6 +140,7 @@ export default function UploadPage() {
               batchIndex: i,
               totalBatches: batches.length,
               generateOverview: isLast,
+              language,
             }),
           });
 
@@ -182,6 +189,7 @@ export default function UploadPage() {
             bookId: id,
             analyzedAt: Date.now(),
             overview: overview || "",
+            language,
             chapters: accumulatedChapters,
           });
           await updateBookStructureStatus(id, "ready");
@@ -312,6 +320,29 @@ export default function UploadPage() {
           </>
         )}
       </div>
+
+      {/* Language selector */}
+      {!loading && (
+        <div className="mt-4 flex items-center gap-3">
+          <span className="text-xs text-[#999]">分析语言</span>
+          <div className="flex bg-[#f5f4f0] rounded-lg p-0.5">
+            {LANGUAGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setLanguage(opt.id)}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                  language === opt.id
+                    ? "bg-white text-[#2c2c2c] shadow-sm font-medium"
+                    : "text-[#999] hover:text-[#666]"
+                }`}
+                title={opt.desc}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <input
         id="file-input"

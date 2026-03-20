@@ -10,8 +10,8 @@ interface Props {
   onNavigate: (page: number) => void;
 }
 
-function isActiveChapter(ch: BookChapter, page: number): boolean {
-  return page >= ch.startPage && page <= ch.endPage;
+function isInRange(page: number, start: number, end: number): boolean {
+  return page >= start && page <= end;
 }
 
 export default function TableOfContents({
@@ -75,13 +75,14 @@ export default function TableOfContents({
 
         <nav className="space-y-0.5">
           {structure.chapters.map((ch, i) => {
-            const active = isActiveChapter(ch, currentPage);
+            const chActive = isInRange(currentPage, ch.startPage, ch.endPage);
             return (
               <div key={i}>
+                {/* Level 1: Chapter */}
                 <button
                   onClick={() => onNavigate(ch.startPage)}
-                  className={`w-full text-left px-2.5 py-2 rounded-lg text-sm transition-colors group ${
-                    active
+                  className={`w-full text-left px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                    chActive
                       ? "bg-[#eef4f0] text-[#2c2c2c] font-medium"
                       : "text-[#666] hover:bg-[#f5f4f0]"
                   }`}
@@ -94,30 +95,72 @@ export default function TableOfContents({
                   </div>
                 </button>
 
-                {/* Sections — only show for active chapter or if few sections */}
-                {ch.sections.length > 0 && active && (
+                {/* Level 2: Sections — show when chapter is active */}
+                {ch.sections.length > 0 && chActive && (
                   <div className="ml-3 border-l border-[#e5e2db] pl-2 my-0.5">
                     {ch.sections.map((sec, j) => {
-                      const secActive =
-                        currentPage >= sec.startPage &&
-                        currentPage <= sec.endPage;
+                      const secActive = isInRange(
+                        currentPage,
+                        sec.startPage,
+                        sec.endPage
+                      );
                       return (
-                        <button
-                          key={j}
-                          onClick={() => onNavigate(sec.startPage)}
-                          className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors ${
-                            secActive
-                              ? "bg-[#f0efe9] text-[#2c2c2c] font-medium"
-                              : "text-[#999] hover:text-[#666] hover:bg-[#f5f4f0]"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="truncate pr-2">{sec.title}</span>
-                            <span className="text-xs text-[#ccc] shrink-0">
-                              {sec.startPage}
-                            </span>
-                          </div>
-                        </button>
+                        <div key={j}>
+                          <button
+                            onClick={() => onNavigate(sec.startPage)}
+                            className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors ${
+                              secActive
+                                ? "bg-[#f0efe9] text-[#2c2c2c] font-medium"
+                                : "text-[#999] hover:text-[#666] hover:bg-[#f5f4f0]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="truncate pr-2">
+                                {sec.title}
+                              </span>
+                              <span className="text-xs text-[#ccc] shrink-0">
+                                {sec.startPage}
+                              </span>
+                            </div>
+                          </button>
+
+                          {/* Level 3: Subsections — show when section is active */}
+                          {sec.subsections &&
+                            sec.subsections.length > 0 &&
+                            secActive && (
+                              <div className="ml-3 border-l border-[#f0efe9] pl-2 my-0.5">
+                                {sec.subsections.map((sub, k) => {
+                                  const subActive = isInRange(
+                                    currentPage,
+                                    sub.startPage,
+                                    sub.endPage
+                                  );
+                                  return (
+                                    <button
+                                      key={k}
+                                      onClick={() =>
+                                        onNavigate(sub.startPage)
+                                      }
+                                      className={`w-full text-left px-2 py-1 rounded-md text-xs transition-colors ${
+                                        subActive
+                                          ? "text-[#5b7f6a] font-medium"
+                                          : "text-[#bbb] hover:text-[#999]"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="truncate pr-2">
+                                          {sub.title}
+                                        </span>
+                                        <span className="text-xs text-[#ddd] shrink-0">
+                                          {sub.startPage}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                        </div>
                       );
                     })}
                   </div>

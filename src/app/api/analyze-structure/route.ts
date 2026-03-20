@@ -5,11 +5,19 @@ interface PageText {
   text: string;
 }
 
+interface SubsectionResult {
+  title: string;
+  startPage: number;
+  endPage: number;
+  summary: string;
+}
+
 interface SectionResult {
   title: string;
   startPage: number;
   endPage: number;
   summary: string;
+  subsections?: SubsectionResult[];
 }
 
 interface ChapterResult {
@@ -20,27 +28,43 @@ interface ChapterResult {
   sections: SectionResult[];
 }
 
-const SYSTEM_PROMPT = `你是一个专业的书籍结构分析助手。你的任务是分析一批书页文本，识别其中的章节和小节结构。
+function buildSystemPrompt(language: string): string {
+  const lang = language === "en" ? "English" : "中文";
+  const langRule = language === "en"
+    ? `- All summaries must be written in **English**
+- Chapter/section titles should keep the original language from the book (do NOT translate titles)
+- If the book mixes languages in titles, keep the original language for each title as-is`
+    : `- 所有 summary 必须使用**中文**书写
+- 章节标题保留原书语言（不要翻译标题）
+- 如果原书标题是中英混合，保持原样`;
 
-## 核心原则：利用目录页
-如果这批页面中包含目录页（Table of Contents / 目录），**必须以目录页为权威参考**来确定章节结构和层级关系。目录页明确标注了：
-- 哪些是「部」（Part）、哪些是「章」（Chapter）、哪些是「节」（Section）
+  return `你是一个专业的书籍结构分析助手。你的任务是分析一批书页文本，识别其中的章节和小节结构。
+
+## 核心原则：以目录页为权威参考
+如果这批页面中包含目录页（Table of Contents / 目录），**必须以目录页为权威参考**来确定：
+- 层级关系：哪些是「部/Part」、哪些是「章/Chapter」、哪些是「节/Section」
 - 每个单元的准确页码
-- 正确的层级嵌套关系
+- 正确的嵌套关系
 
 即使后续正文的标题格式不太一致，也要以目录页的层级为准。
 
-## 严格的两层结构
-输出只有两个层级：chapter（章）和 section（节）。
-- 如果书有「部 → 章 → 节」三层结构，把「部」当作 chapter，「章」当作 section
-- 如果书有「章 → 节」两层结构，直接对应 chapter 和 section
-- 如果书只有「章」没有节，sections 为空数组
-- **绝对不要把高层级的「部/Part」和低层级的「章/Chapter」放在同一个 chapter 层**
+## 层级结构——严格遵循原书
+输出最多三个层级：chapter → section → subsection。**层级划分必须忠实反映原书的实际结构**：
 
-## 语言一致性
-- 所有 title 和 summary 统一使用**中文**
-- 如果原书标题是英文（如 "Chapter 7. A Basis for Good Design"），翻译成中文（如「第7章 良好设计的基础」）
-- summary 一律用中文书写
+- 如果书有「部 → 章 → 节」三层：部 = chapter，章 = section，节 = subsection
+- 如果书有「章 → 节 → 小节」三层：章 = chapter，节 = section，小节 = subsection
+- 如果书有「章 → 节」两层：章 = chapter，节 = section，subsections 省略
+- 如果书只有「章」一层：sections 为空数组
+
+**关键**：同一个 chapter 层级的条目必须是同一层级的结构单元。不要把「第一部分」和「第三章」放在同一层。
+
+## 语言规则
+${langRule}
+
+## 标题一致性
+- 标题保留原书的语言和格式（如原书写 "Chapter 3" 就保留，写「第三章」也保留）
+- 不要自行翻译或改写标题
+- 同一层级的标题风格应该一致
 
 ## 识别规则
 - 章标题通常有明显标记：「第X章」「Chapter X」「Part X」或独占一页的大标题
@@ -57,33 +81,45 @@ const SYSTEM_PROMPT = `你是一个专业的书籍结构分析助手。你的任
 ## 概括要求
 - summary 不要复述章节标题，要概括实际内容
 - 用一两句话说清楚这一章/节讲了什么、论证了什么、引入了什么概念
+- summary 使用 ${lang} 书写
 - 如果某些页是空白/图片/没有文字，在 summary 中注明
 
 ## 输出格式
 严格 JSON 数组，每个元素是一个 chapter：
 [
   {
-    "title": "章标题（中文）",
+    "title": "章标题（保留原书语言）",
     "startPage": 起始页码,
     "endPage": 结束页码,
-    "summary": "2-3句中文概括",
+    "summary": "${lang}概括",
     "sections": [
       {
-        "title": "节标题（中文）",
+        "title": "节标题",
         "startPage": 起始页码,
         "endPage": 结束页码,
-        "summary": "2-3句中文概括"
+        "summary": "${lang}概括",
+        "subsections": [
+          {
+            "title": "小节标题",
+            "startPage": 起始页码,
+            "endPage": 结束页码,
+            "summary": "${lang}概括"
+          }
+        ]
       }
     ]
   }
 ]
 
-sections 数组可以为空（如果这一章没有明显的小节划分）。`;
+sections 和 subsections 数组可以为空或省略（如果没有对应的子层级）。`;
+}
 
-const OVERVIEW_PROMPT = `根据以下完整的书籍章节结构，用 3-5 句话写一个全书内容概述。不要列举章节，而是概括这本书的核心主题、论证逻辑和主要贡献。
-
-章节结构：
-`;
+function buildOverviewPrompt(language: string): string {
+  if (language === "en") {
+    return `Based on the following book chapter structure, write a 3-5 sentence overview of the entire book. Do not list chapters — summarize the core themes, argument logic, and main contributions.\n\nChapter structure:\n`;
+  }
+  return `根据以下完整的书籍章节结构，用 3-5 句话写一个全书内容概述。不要列举章节，而是概括这本书的核心主题、论证逻辑和主要贡献。\n\n章节结构：\n`;
+}
 
 const AVAILABLE_MODELS = [
   "gemini-2.5-flash-lite",
@@ -102,7 +138,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { bookTitle, pageTexts, previousChapters, batchIndex, totalBatches, model, generateOverview } =
+  const { bookTitle, pageTexts, previousChapters, batchIndex, totalBatches, model, generateOverview, language } =
     await request.json() as {
       bookTitle: string;
       pageTexts: PageText[];
@@ -111,6 +147,7 @@ export async function POST(request: NextRequest) {
       totalBatches: number;
       model?: string;
       generateOverview?: boolean;
+      language?: string;
     };
 
   if (!pageTexts || pageTexts.length === 0) {
@@ -124,21 +161,24 @@ export async function POST(request: NextRequest) {
     ? model
     : "gemini-2.5-flash-lite";
 
+  const lang = language === "en" ? "en" : "zh";
+  const systemPrompt = buildSystemPrompt(lang);
+
   // Build the page content string
   const pagesContent = pageTexts
-    .map((p) => `--- 第 ${p.page} 页 ---\n${p.text || "[无文字内容]"}`)
+    .map((p) => `--- Page ${p.page} ---\n${p.text || "[no text content]"}`)
     .join("\n\n");
 
-  let userPrompt = `正在分析《${bookTitle}》的结构（批次 ${batchIndex + 1}/${totalBatches}）。\n\n`;
+  let userPrompt = `Analyzing the structure of "${bookTitle}" (batch ${batchIndex + 1}/${totalBatches}).\n\n`;
 
   if (previousChapters && previousChapters.length > 0) {
     const prevSummary = previousChapters
-      .map((c) => `- ${c.title}（第${c.startPage}-${c.endPage}页）`)
+      .map((c) => `- ${c.title} (p.${c.startPage}-${c.endPage})`)
       .join("\n");
-    userPrompt += `前面批次已识别的章节：\n${prevSummary}\n\n`;
+    userPrompt += `Previously identified chapters:\n${prevSummary}\n\n`;
   }
 
-  userPrompt += `以下是第 ${pageTexts[0].page} 页到第 ${pageTexts[pageTexts.length - 1].page} 页的内容：\n\n${pagesContent}`;
+  userPrompt += `Pages ${pageTexts[0].page} to ${pageTexts[pageTexts.length - 1].page}:\n\n${pagesContent}`;
 
   try {
     const res = await fetch(
@@ -147,7 +187,7 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ parts: [{ text: userPrompt }] }],
           generationConfig: {
             temperature: 0.3,
@@ -178,10 +218,8 @@ export async function POST(request: NextRequest) {
     // If this is the last batch and overview is requested, generate it
     let overview: string | undefined;
     if (generateOverview && chapters.length > 0) {
-      // Merge with previous chapters for full picture
       const allChapters = [...(previousChapters || [])];
 
-      // Merge CONTINUE chapter
       for (const ch of chapters) {
         if (ch.title === "CONTINUE" && allChapters.length > 0) {
           const last = allChapters[allChapters.length - 1];
@@ -194,7 +232,7 @@ export async function POST(request: NextRequest) {
       }
 
       const chaptersListing = allChapters
-        .map((c) => `${c.title}（第${c.startPage}-${c.endPage}页）: ${c.summary}`)
+        .map((c) => `${c.title} (p.${c.startPage}-${c.endPage}): ${c.summary}`)
         .join("\n");
 
       const overviewRes = await fetch(
@@ -203,7 +241,7 @@ export async function POST(request: NextRequest) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: OVERVIEW_PROMPT + chaptersListing }] }],
+            contents: [{ parts: [{ text: buildOverviewPrompt(lang) + chaptersListing }] }],
             generationConfig: { temperature: 0.3 },
           }),
         }
