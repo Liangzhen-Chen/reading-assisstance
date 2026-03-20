@@ -66,8 +66,22 @@ export interface Book {
 let dbInstance: IDBDatabase | null = null;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+function resetDB() {
+  dbInstance = null;
+  dbPromise = null;
+}
+
 function openDB(): Promise<IDBDatabase> {
-  if (dbInstance) return Promise.resolve(dbInstance);
+  // Verify existing connection is still usable
+  if (dbInstance) {
+    try {
+      // Quick health check — will throw if connection is closed
+      dbInstance.transaction(BOOKS_STORE, "readonly");
+      return Promise.resolve(dbInstance);
+    } catch {
+      resetDB();
+    }
+  }
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
@@ -87,21 +101,20 @@ function openDB(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       dbInstance = request.result;
-      // If the connection is closed externally (e.g. version change), reset singleton
-      dbInstance.onclose = () => {
-        dbInstance = null;
-        dbPromise = null;
-      };
+      dbInstance.onclose = () => resetDB();
       dbInstance.onversionchange = () => {
         dbInstance?.close();
-        dbInstance = null;
-        dbPromise = null;
+        resetDB();
       };
       resolve(dbInstance);
     };
     request.onerror = () => {
-      dbPromise = null;
+      resetDB();
       reject(request.error);
+    };
+    request.onblocked = () => {
+      resetDB();
+      reject(new Error("IndexedDB upgrade blocked by another connection"));
     };
   });
 
@@ -152,11 +165,21 @@ export async function updateBookProgress(
   id: string,
   lastPage: number
 ): Promise<void> {
-  const book = await getBook(id);
-  if (book) {
-    book.lastPage = lastPage;
-    await saveBook(book);
-  }
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BOOKS_STORE, "readwrite");
+    const store = tx.objectStore(BOOKS_STORE);
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const book = req.result;
+      if (book) {
+        book.lastPage = lastPage;
+        store.put(book);
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 // --- Annotations ---
@@ -276,9 +299,19 @@ export async function updateBookStructureStatus(
   id: string,
   status: Book["structureStatus"]
 ): Promise<void> {
-  const book = await getBook(id);
-  if (book) {
-    book.structureStatus = status;
-    await saveBook(book);
-  }
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BOOKS_STORE, "readwrite");
+    const store = tx.objectStore(BOOKS_STORE);
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const book = req.result;
+      if (book) {
+        book.structureStatus = status;
+        store.put(book);
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }

@@ -28,6 +28,7 @@ export default function ReaderPage() {
   const [title, setTitle] = useState("");
   const [scale, setScale] = useState(1.5);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const renderingRef = useRef(false);
 
   // Annotation state
@@ -75,7 +76,8 @@ export default function ReaderPage() {
         }
       } catch (err) {
         console.error("Failed to load book:", err);
-        router.push("/");
+        setLoadError(`加载失败: ${String(err)}`);
+        setLoading(false);
       }
     })();
   }, [bookId, router]);
@@ -307,6 +309,30 @@ export default function ReaderPage() {
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-3 border-[#5b7f6a] border-t-transparent rounded-full animate-spin" />
           <p className="text-[#666]">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#faf9f6]">
+        <div className="flex flex-col items-center gap-4 max-w-md text-center">
+          <p className="text-red-500 text-sm">{loadError}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-[#5b7f6a] text-white text-sm rounded-lg hover:bg-[#4d6e5b]"
+            >
+              重试
+            </button>
+            <a
+              href="/"
+              className="px-4 py-2 border border-[#e5e2db] text-[#666] text-sm rounded-lg hover:bg-[#f5f4f0]"
+            >
+              返回书架
+            </a>
+          </div>
         </div>
       </div>
     );
